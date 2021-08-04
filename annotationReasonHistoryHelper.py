@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from IPython.display import clear_output
 
 def safelySaveDf(df, fn):
     try:
@@ -75,58 +74,68 @@ def markReasonAndHistory(fn):
     # Initialize variables
     count = 0
     indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON']
+    end = False
+    idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
+    print(idx)
 
-    for idx, row in df.iterrows():
-        # if the row doesn't have scan reason and doesn't have history
-        if (row['scan_reason'] == '' or type(row['scan_reason']) == float) and (row['pat_history'] == '' or type(row['pat_history'] == float)):
-            # Get the text to print
-            narr = row['narrative_text']
-            if not type(row['impression_text']) is float:
-                narr += "\n\n"+ row['impression_text']
+    # Using a while loop allows forward and backward iteration
+    while not end:
+        row = df.loc[idx, :]
+
+        # Might need to change this if statement to enable backwards iteration
+        # Get the text to print
+        narr = row['narrative_text']
+        if not type(row['impression_text']) is float:
+            narr += "IMPRESSION:"+ row['impression_text']
     
-            # Format the text - green, yellow, then red
-            narr = markYellowText(narr, indicators)
+        # Format the text - green, yellow, then red
+        narr = markYellowText(narr, indicators)
 
-            # Print the text
-            print(narr)
+        # Print the text
+        print("Narrative index (Excel-based rows):", idx+2)
+        print(narr)
+        print()
+
+        # Get input from the user
+        scan_reason = input("Why was this scan was performed? (type 'skip' to skip this narrative, 'missing' if no reason found) ")
+        pat_history = input("What is the patient's clinical history? (type 'skip' to skip this narrative, 'missing' if no history found) ")
+        print()
+
+        if scan_reason != "skip" and pat_history != "skip" and scan_reason != "" and pat_history != "":
+
+            # Add the input to the dataframe
+            df.loc[idx, 'scan_reason'] = scan_reason
+            df.loc[idx, 'pat_history'] = pat_history
+    
+            # Increment the counter
+            count += 1
+    
+            if count % 10 == 0:
+                print("Total annotated scans this round:", count)
+                print()
+
+        nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
+
+        if nextStep == 'n':
+            idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
             print()
-
-            # Get input from the user
-            scan_reason = input("Why was this scan was performed? (type 'skip' to skip this narrative, 'missing' if no reason found) ")
-            pat_history = input("What is the patient's clinical history? (type 'skip' to skip this narrative, 'missing' if no history found) ")
+        elif nextStep == 'p': 
+            # decrement index
+            print("Revisiting the previous report...")
+            idx -= 1
             print()
-
-            if scan_reason != "skip" and pat_history != "skip" and scan_reason != "" and pat_history != "":
-
-                # Add the input to the dataframe
-                df.loc[idx, 'scan_reason'] = scan_reason
-                df.loc[idx, 'pat_history'] = pat_history
-    
-                # Increment the counter
-                count += 1
-    
-                if count % 10 == 0:
-                    print("Total annotated scans this round:", count)
-                    print()
-
-                    done = input("Would you like to stop for now? (y/n) ")
-
-                    if done == 'y':
-                        safelySaveDf(df, fn)
-                        print()
-                        return
-
-                    else:
-                        save = input("Would you like to save your progress? (y/n) ")
-        
-                        if save == 'y':
-                            safelySaveDf(df, fn)
-                            print()
-                        else:
-                            print("Continuing without saving")
-                            print()
-
-
+        elif nextStep == 'r':
+            print("Repeating the current report...")
+            print()
+        elif nextStep == 's':
+            print("Saving and continuing...")
+            safelySaveDf(df, fn)
+            idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
+            print()
+        elif nextStep == 'e':
+            print("Saving and exiting...")
+            safelySaveDf(df, fn)
+            return
 
 
     print("You have gone through all of the sessions!")
