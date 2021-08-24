@@ -72,7 +72,7 @@ def loadDataframe(fn):
     return df
 
 
-def markReasonAndHistory(df, fn):
+def markReasonAndHistory(df, fn, name):
 
     # Initialize variables
     count = 0
@@ -109,6 +109,7 @@ def markReasonAndHistory(df, fn):
             # Add the input to the dataframe
             df.loc[idx, 'scan_reason'] = scan_reason
             df.loc[idx, 'pat_history'] = pat_history
+            df.loc[idx, 'annotator'] = name
     
             # Increment the counter
             count += 1
