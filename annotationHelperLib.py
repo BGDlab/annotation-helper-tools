@@ -72,6 +72,99 @@ def loadDataframe(fn):
     return df
 
 
+def checkForAnnotator(df, name):
+    # Get the number of columns containing the word "annotator" in their name
+    nameCols = [c for c in list(df) if "annotator" in c]
+
+    # Get the individual's name from the columns
+    names = [df[c].values[0] for c in nameCols]
+
+    # If their name is not in the list of annotator names
+    if name not in names:
+        # Add a new column
+        nameCol = "annotator_"+ str(len(nameCols)+1).zfill(2)
+        # Put their name in the column
+        df[nameCol] = name
+        # Make a column for annotations_name
+        annotationCol = "confirm_clip_" + str(len(nameCols)+1).zfill(2)
+        df[annotationCol] = np.nan
+
+    return df, nameCol, annotationCol
+
+
+
+def markReliabilityReports(df, fn, annotationCol):
+
+    # Initialize variables
+    count = 0
+    indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON']
+    end = False
+    idx = df[(df[annotationCol].isnull())].index[0]
+
+    # Using a while loop allows forward and backward iteration
+    while not end:
+        row = df.loc[idx, :]
+
+        # Might need to change this if statement to enable backwards iteration
+        # Get the text to print
+        narr = row['narrative_text']
+        if not type(row['impression_text']) is float:
+            narr += "IMPRESSION:"+ row['impression_text']
+    
+        # Format the text - green, yellow, then red
+        narr = markYellowText(narr, indicators)
+
+        # Print the text
+        print(narr)
+        print()
+
+        # Get input from the user
+        clip = input('Does the patient belong in the "Cohort with Limited Imaging Pathology"? (y/n/skip) ')
+        print()
+
+        if clip != "skip" and clip != "" and (clip == "y" or clip == "n"):
+
+            if clip == "y":
+                # Add the input to the dataframe
+                df.loc[idx, annotationCol] = False
+            elif clip == "n":
+                df.loc[idx, annotationCol] = True
+    
+            # Increment the counter
+            count += 1
+    
+            if count % 10 == 0:
+                print("Total annotated scans this round:", count)
+                print()
+
+        nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
+
+        if nextStep == 'n':
+            idx = df[(df[annotationCol].isnull())].index[0]
+            print()
+        elif nextStep == 'p': 
+            # decrement index
+            print("Revisiting the previous report...")
+            idx -= 1
+            print()
+        elif nextStep == 'r':
+            print("Repeating the current report...")
+            print()
+        elif nextStep == 's':
+            print("Saving and continuing...")
+            safelySaveDf(df, fn)
+            idx = df[(df[annotationCol].isnull())].index[0]
+            print()
+        elif nextStep == 'e':
+            print("Saving and exiting...")
+            safelySaveDf(df, fn)
+            return
+
+
+    print("You have gone through all of the sessions!")
+    safelySaveDf(df, fn)
+
+
 def markReasonAndHistory(df, fn, name):
 
     # Initialize variables
