@@ -148,7 +148,9 @@ def markReasonAndHistory(df, fn):
 # Main
 if __name__ == "__main__":
 
-    fn = "/Users/schabdachj/Data/clip/tables/rawdata/caleb_start.csv"
-    df = loadDataframe(fn)
-    markReasonAndHistory(df, fn)
+    print("Radiology Report Annotation Helper Library v 0.1")
+    print("Written and maintained by Jenna Young, PhD (@jmschabdach on Github)")
+    print("Tested and used by:")
+    print("- Caleb Schmitt")
+
 
