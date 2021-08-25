@@ -1,6 +1,34 @@
 import pandas as pd
 import numpy as np
 
+
+def dealWithNext(df, fn, nextStep, column, idx):
+    end = False
+
+    if nextStep == 'n':
+        idx = df[df[column].isnull()].index[0]
+        print()
+    elif nextStep == 'p': 
+        # decrement index
+        print("Revisiting the previous report...")
+        idx -= 1
+        print()
+    elif nextStep == 'r':
+        print("Repeating the current report...")
+        print()
+    elif nextStep == 's':
+        print("Saving and continuing...")
+        safelySaveDf(df, fn)
+        idx = df[df[column].isnull()].index[0]
+        print()
+    elif nextStep == 'e':
+        print("Saving and exiting...")
+        safelySaveDf(df, fn)
+        end = True
+        
+    return idx, end
+
+
 def safelySaveDf(df, fn):
     try:
         df = df.astype(str)
@@ -9,6 +37,7 @@ def safelySaveDf(df, fn):
     except PermissionError:
         print("Error: write access to "+fn+" denied. Please check that the file is not locked by Datalad.")
         return False
+
 
 def markRedText(line, toMark):
     start = '\x1b[5;30;41m' # red background, bold black text
@@ -60,6 +89,7 @@ def markYellowText(line, toMark):
         
     return line
 
+
 def loadDataframe(fn):
     # Load the dataframe
     df = pd.read_csv(fn)
@@ -102,7 +132,7 @@ def markReliabilityReports(df, fn, annotationCol):
     idx = df[(df[annotationCol].isnull())].index[0]
 
     # Using a while loop allows forward and backward iteration
-    while not end:
+    while idx >= 0 and idx < df.shape[0]:
         row = df.loc[idx, :]
 
         # Might need to change this if statement to enable backwards iteration
@@ -138,28 +168,12 @@ def markReliabilityReports(df, fn, annotationCol):
                 print()
 
         nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
+        idx, end = dealWithNext(df, fn, nextStep, annotationCol, idx)
 
-        if nextStep == 'n':
-            idx = df[(df[annotationCol].isnull())].index[0]
-            print()
-        elif nextStep == 'p': 
-            # decrement index
-            print("Revisiting the previous report...")
-            idx -= 1
-            print()
-        elif nextStep == 'r':
-            print("Repeating the current report...")
-            print()
-        elif nextStep == 's':
-            print("Saving and continuing...")
-            safelySaveDf(df, fn)
-            idx = df[(df[annotationCol].isnull())].index[0]
-            print()
-        elif nextStep == 'e':
-            print("Saving and exiting...")
-            safelySaveDf(df, fn)
+        if end: 
             return
-
+        else:
+            print("Row", idx)
 
     print("You have gone through all of the sessions!")
     safelySaveDf(df, fn)
@@ -175,7 +189,7 @@ def markReasonAndHistory(df, fn, name):
     print(idx)
 
     # Using a while loop allows forward and backward iteration
-    while not end:
+    while idx >= 0 and idx < df.shape[0]:
         row = df.loc[idx, :]
 
         # Might need to change this if statement to enable backwards iteration
@@ -212,28 +226,12 @@ def markReasonAndHistory(df, fn, name):
                 print()
 
         nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
+        idx, end = dealWithNext(df, fn, nextStep, 'scan_reason', idx)
 
-        if nextStep == 'n':
-            idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
-            print()
-        elif nextStep == 'p': 
-            # decrement index
-            print("Revisiting the previous report...")
-            idx -= 1
-            print()
-        elif nextStep == 'r':
-            print("Repeating the current report...")
-            print()
-        elif nextStep == 's':
-            print("Saving and continuing...")
-            safelySaveDf(df, fn)
-            idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
-            print()
-        elif nextStep == 'e':
-            print("Saving and exiting...")
-            safelySaveDf(df, fn)
+        if end: 
             return
-
+        else:
+            print("Row", idx)
 
     print("You have gone through all of the sessions!")
     safelySaveDf(df, fn)
@@ -246,12 +244,12 @@ def markAllFields(df, fn, name):
     indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON']
     end = False
     # Change this 
-    idx = df[df['confirm_clip'].isnull()]
+    idx = df[df['confirm_clip'].isnull()].index[0]
     # idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
-    print("Starting CLIP identification at row", idx)
+    print("Row", idx)
 
     # Using a while loop allows forward and backward iteration
-    while not end:
+    while idx >= 0 and idx < df.shape[0]:
         row = df.loc[idx, :]
 
         # Might need to change this if statement to enable backwards iteration
@@ -279,10 +277,10 @@ def markAllFields(df, fn, name):
 
             # Update the dataframe with the CLIP status
             if clip == "y":
-                df.loc[idx, annotationCol] = True 
+                df.loc[idx, "confirm_clip"] = True 
                 df.loc[idx, 'annotator'] = name
             elif clip == "n":
-                df.loc[idx, annotationCol] = False 
+                df.loc[idx, "confirm_clip"] = False 
                 df.loc[idx, 'annotator'] = name
 
             # Ask the user to identify the reason for the scan and any patient history information
@@ -304,28 +302,12 @@ def markAllFields(df, fn, name):
                     print()
 
         nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
+        idx, end = dealWithNext(df, fn, nextStep, 'confirm_clip', idx)
 
-        if nextStep == 'n':
-            idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
-            print()
-        elif nextStep == 'p': 
-            # decrement index
-            print("Revisiting the previous report...")
-            idx -= 1
-            print()
-        elif nextStep == 'r':
-            print("Repeating the current report...")
-            print()
-        elif nextStep == 's':
-            print("Saving and continuing...")
-            safelySaveDf(df, fn)
-            idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
-            print()
-        elif nextStep == 'e':
-            print("Saving and exiting...")
-            safelySaveDf(df, fn)
+        if end: 
             return
-
+        else:
+            print("Row", idx)
 
     print("You have gone through all of the sessions!")
     safelySaveDf(df, fn)

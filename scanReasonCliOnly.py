@@ -18,5 +18,5 @@ if __name__ == "__main__":
     df = loadDataframe(fn)
 
     # Annotate
-    markAllFields(df, fn, name)
+    markReasonAndHistory(df, fn, name)
 
