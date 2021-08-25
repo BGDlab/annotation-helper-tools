@@ -1,0 +1,9 @@
+## Usage
+
+Get the data from Jenna. 
+
+Do the training/reliability file first: `python reliabilityCli.py -f /path/to/reliability.csv -n "Your Name"`
+
+Then go ahead and work on the main file: `python annotatorCli.py -f /path/to/master.csv -n "Your Name"`
+
+If you somehow ran out of reports or only want to look at scan reasons and histories: `python scanReasonOnlyCli.py -f /path/to/master.csv -n "Your Name"`
