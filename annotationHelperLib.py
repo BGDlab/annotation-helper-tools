@@ -126,9 +126,9 @@ def markReliabilityReports(df, fn, annotationCol):
 
             if clip == "y":
                 # Add the input to the dataframe
-                df.loc[idx, annotationCol] = False
+                df.loc[idx, annotationCol] = True 
             elif clip == "n":
-                df.loc[idx, annotationCol] = True
+                df.loc[idx, annotationCol] = False 
     
             # Increment the counter
             count += 1
@@ -210,6 +210,98 @@ def markReasonAndHistory(df, fn, name):
             if count % 10 == 0:
                 print("Total annotated scans this round:", count)
                 print()
+
+        nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
+
+        if nextStep == 'n':
+            idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
+            print()
+        elif nextStep == 'p': 
+            # decrement index
+            print("Revisiting the previous report...")
+            idx -= 1
+            print()
+        elif nextStep == 'r':
+            print("Repeating the current report...")
+            print()
+        elif nextStep == 's':
+            print("Saving and continuing...")
+            safelySaveDf(df, fn)
+            idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
+            print()
+        elif nextStep == 'e':
+            print("Saving and exiting...")
+            safelySaveDf(df, fn)
+            return
+
+
+    print("You have gone through all of the sessions!")
+    safelySaveDf(df, fn)
+
+
+def markAllFields(df, fn, name):
+
+    # Initialize variables
+    count = 0
+    indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON']
+    end = False
+    # Change this 
+    idx = df[df['confirm_clip'].isnull()]
+    # idx = df[(df['scan_reason'].isnull()) & (df['pat_history'].isnull())].index[0]
+    print("Starting CLIP identification at row", idx)
+
+    # Using a while loop allows forward and backward iteration
+    while not end:
+        row = df.loc[idx, :]
+
+        # Might need to change this if statement to enable backwards iteration
+        # Get the text to print
+        narr = row['narrative_text']
+        if not type(row['impression_text']) is float:
+            narr += "IMPRESSION:"+ row['impression_text']
+    
+        # Format the text - green, yellow, then red
+        narr = markYellowText(narr, indicators)
+
+        # Print the text
+        print(narr)
+        print()
+
+        # Get input from the user - is the patient CLIP
+        clip = ""
+
+        while not (clip == "y" or clip == "n" or clip == "skip"):
+            clip = input('Does the patient belong in the "Cohort with Limited Imaging Pathology"? (y/n/skip) ')
+            print()
+
+        # if the user doesn't skip the entry, do stuff
+        if clip != "skip":
+
+            # Update the dataframe with the CLIP status
+            if clip == "y":
+                df.loc[idx, annotationCol] = True 
+                df.loc[idx, 'annotator'] = name
+            elif clip == "n":
+                df.loc[idx, annotationCol] = False 
+                df.loc[idx, 'annotator'] = name
+
+            # Ask the user to identify the reason for the scan and any patient history information
+            scan_reason = input("Why was this scan was performed? (type 'skip' to skip this narrative, 'missing' if no reason found) ")
+            pat_history = input("What is the patient's clinical history? (type 'skip' to skip this narrative, 'missing' if no history found) ")
+            print()
+
+            if scan_reason != "skip" and pat_history != "skip" and scan_reason != "" and pat_history != "":
+    
+                # Add the input to the dataframe
+                df.loc[idx, 'scan_reason'] = scan_reason
+                df.loc[idx, 'pat_history'] = pat_history
+        
+                # Increment the counter
+                count += 1
+        
+                if count % 10 == 0:
+                    print("Total annotated scans this round:", count)
+                    print()
 
         nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
 

@@ -1,11 +1,23 @@
-import pandas as pd
-import numpy as np
 from annotationHelperLib import *
+import argparse
 
 # Main
 if __name__ == "__main__":
 
-    fn = "/Users/schabdachj/Data/clip/tables/rawdata/caleb_start.csv"
+    # Set up the argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f", "--filename", help="")
+    parser.add_argument("-n", "--annotator-name", help='First and last name of the annotator in the format "First Last"')
+
+    # Parse the arguments
+    args = parser.parse_args()
+    fn = args.filename
+    name = args.annotator_name
+
+    # Load the dataframe
     df = loadDataframe(fn)
-    markReasonAndHistory(df, fn)
+
+    # Annotate
+    markAllFields(df, fn, name)
+    markReasonAndHistory(df, fn, name))
 
