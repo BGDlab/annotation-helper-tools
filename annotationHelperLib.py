@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from IPython.display import clear_output
 
 
 def dealWithNext(df, fn, nextStep, column, idx):
@@ -32,7 +33,7 @@ def dealWithNext(df, fn, nextStep, column, idx):
 def safelySaveDf(df, fn):
     try:
         df = df.astype(str)
-        df.to_csv(fn)
+        df.to_csv(fn, index=False)
         return True
     except PermissionError:
         print("Error: write access to "+fn+" denied. Please check that the file is not locked by Datalad.")
@@ -86,6 +87,7 @@ def markYellowText(line, toMark):
     
     else:
         print("Error: the second argument must be either a string or a list of strings")
+        print(toMark)
         
     return line
 
@@ -98,6 +100,11 @@ def loadDataframe(fn):
         df['scan_reason'] = np.nan
     if 'pat_history' not in list(df):
         df['pat_history'] = np.nan
+
+    # If there are "Unnamed:" columns in the dataframe, remove them
+    toDrop = [col for col in list(df) if "Unnamed:" in col]
+    if len(toDrop) > 0:
+        df = df.drop(columns=toDrop)
 
     return df
 
@@ -122,14 +129,21 @@ def checkForAnnotator(df, name):
     return df, nameCol, annotationCol
 
 
+def markClipStatus(df, fn, name, clearScreen=False, toHighlight=[]):
 
-def markReliabilityReports(df, fn, annotationCol):
+    print("Dataframe headers:", list(df))
+    print("File to load:", fn)
+    print("Annotator name:", name)
+    print("Clear screen:", clearScreen)
+    print("Indicators:", toHighlight)
 
     # Initialize variables
     count = 0
-    indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON']
+    indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON'] + toHighlight
     end = False
-    idx = df[(df[annotationCol].isnull())].index[0]
+    # Change this 
+    idx = df[df['confirm_clip'].isnull()].index[0]
+    print("Row", idx)
 
     # Using a while loop allows forward and backward iteration
     while idx >= 0 and idx < df.shape[0]:
@@ -148,27 +162,36 @@ def markReliabilityReports(df, fn, annotationCol):
         print(narr)
         print()
 
-        # Get input from the user
-        clip = input('Does the patient belong in the "Cohort with Limited Imaging Pathology"? (y/n/skip) ')
-        print()
+        # Get input from the user - is the patient CLIP
+        clip = ""
 
-        if clip != "skip" and clip != "" and (clip == "y" or clip == "n"):
+        while not (clip == "y" or clip == "n" or clip == "skip"):
+            clip = input('Does the patient belong in the "Cohort with Limited Imaging Pathology"? (y/n/skip) ')
+            print()
 
+        # if the user doesn't skip the entry, do stuff
+        if clip != "skip" and clip in ["y", "n"]:
+
+            # Update the dataframe with the CLIP status
             if clip == "y":
-                # Add the input to the dataframe
-                df.loc[idx, annotationCol] = True 
+                df.loc[idx, "confirm_clip"] = True 
+                df.loc[idx, 'annotator'] = name
             elif clip == "n":
-                df.loc[idx, annotationCol] = False 
-    
+                df.loc[idx, "confirm_clip"] = False 
+                df.loc[idx, 'annotator'] = name
+       
             # Increment the counter
             count += 1
-    
+
+            if clearScreen:
+                clear_output()
+        
             if count % 10 == 0:
                 print("Total annotated scans this round:", count)
                 print()
 
         nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
-        idx, end = dealWithNext(df, fn, nextStep, annotationCol, idx)
+        idx, end = dealWithNext(df, fn, nextStep, 'confirm_clip', idx)
 
         if end: 
             return
@@ -227,6 +250,9 @@ def markReasonAndHistory(df, fn, name):
 
         nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
         idx, end = dealWithNext(df, fn, nextStep, 'scan_reason', idx)
+
+        print(idx)
+        print("end?", end)
 
         if end: 
             return

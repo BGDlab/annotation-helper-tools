@@ -16,7 +16,9 @@ if __name__ == "__main__":
 
     # Load the dataframe
     df = loadDataframe(fn)
+    print(list(df))
 
     # Annotate
-    markAllFields(df, fn, name)
+    #markAllFields(df, fn, name)
+    
 
