@@ -87,7 +87,6 @@ def markYellowText(line, toMark):
     
     else:
         print("Error: the second argument must be either a string or a list of strings")
-        print(toMark)
         
     return line
 
@@ -131,12 +130,6 @@ def checkForAnnotator(df, name):
 
 def markClipStatus(df, fn, name, clearScreen=False, toHighlight=[]):
 
-    print("Dataframe headers:", list(df))
-    print("File to load:", fn)
-    print("Annotator name:", name)
-    print("Clear screen:", clearScreen)
-    print("Indicators:", toHighlight)
-
     # Initialize variables
     count = 0
     indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON'] + toHighlight
@@ -144,6 +137,7 @@ def markClipStatus(df, fn, name, clearScreen=False, toHighlight=[]):
     # Change this 
     idx = df[df['confirm_clip'].isnull()].index[0]
     print("Row", idx)
+    print()
 
     # Using a while loop allows forward and backward iteration
     while idx >= 0 and idx < df.shape[0]:
@@ -342,7 +336,7 @@ def markAllFields(df, fn, name):
 # Main
 if __name__ == "__main__":
 
-    print("Radiology Report Annotation Helper Library v 0.1")
+    print("Radiology Report Annotation Helper Library v 0.2")
     print("Written and maintained by Jenna Young, PhD (@jmschabdach on Github)")
     print("Tested and used by:")
     print("- Caleb Schmitt")
