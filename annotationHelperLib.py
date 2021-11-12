@@ -5,6 +5,7 @@ from IPython.display import clear_output
 
 def dealWithNext(df, fn, nextStep, column, idx):
     end = False
+    print(nextStep)
 
     if nextStep == 'n':
         idx = df[df[column].isnull()].index[0]
@@ -177,13 +178,20 @@ def markClipStatus(df, fn, name, clearScreen=False, toHighlight=[]):
             # Increment the counter
             count += 1
 
-            if clearScreen:
-                clear_output()
-        
-            if count % 10 == 0:
-                print("Total annotated scans this round:", count)
-                print()
 
+        elif clip == "skip":
+            print("Skipping report")
+            df.loc[idx, "confirm_clip"] = "skipped"
+            df.loc[idx, 'annotator'] = name
+ 
+        if clearScreen:
+            clear_output()
+    
+        if count % 10 == 0:
+            print("Total annotated scans this round:", count)
+            print()
+
+         
         nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
         idx, end = dealWithNext(df, fn, nextStep, 'confirm_clip', idx)
 
@@ -194,6 +202,84 @@ def markClipStatus(df, fn, name, clearScreen=False, toHighlight=[]):
 
     print("You have gone through all of the sessions!")
     safelySaveDf(df, fn)
+
+def nadiaMarkClipStatus(df, fn, name, clearScreen=False, toHighlight=[]):
+
+    # Initialize variables
+    count = 0
+    indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON'] + toHighlight
+    end = False
+    # Change this 
+    idx = df[df['confirm_clip'].isnull()].index[0]
+    print("Row", idx)
+    print()
+
+    # Using a while loop allows forward and backward iteration
+    while idx >= 0 and idx < df.shape[0]:
+        row = df.loc[idx, :]
+
+        # Might need to change this if statement to enable backwards iteration
+        # Get the text to print
+        narr = row['narrative_text']
+        if not type(row['impression_text']) is float:
+            narr += "IMPRESSION:"+ row['impression_text']
+    
+        # Format the text - green, yellow, then red
+        narr = markYellowText(narr, indicators)
+
+        # Print the text
+        print(narr)
+        print()
+
+        # Get input from the user - is the patient CLIP
+        clip = ""
+
+        while not (clip == "y" or clip == "n" or clip == "skip"):
+            clip = input('Does the patient belong in the "Cohort with Limited Imaging Pathology"? (y/n/skip) ')
+            print()
+
+        # if the user doesn't skip the entry, do stuff
+        if clip != "skip" and clip in ["y", "n"]:
+
+            # Update the dataframe with the CLIP status
+            if clip == "y":
+                df.loc[idx, "confirm_clip"] = True 
+                df.loc[idx, 'annotator'] = name
+            elif clip == "n":
+                df.loc[idx, "confirm_clip"] = False 
+                df.loc[idx, 'annotator'] = name
+       
+            # Increment the counter
+            count += 1
+
+        elif clip == "skip":
+            print("Skipping report")
+            df.loc[idx, "confirm_clip"] = "skipped"
+            df.loc[idx, 'annotator'] = name
+ 
+        # Automatic save
+        safelySaveDf(df, fn)
+
+        if clearScreen:
+            clear_output()
+
+        print("Save Successful!")              
+   
+        if count % 10 == 0:
+            print("Total annotated scans this round:", count)
+            print()
+
+        nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/e for exit) ")
+        idx, end = dealWithNext(df, fn, nextStep, 'confirm_clip', idx)
+
+        if end: 
+            return
+        else:
+            print("Row", idx)
+
+    print("You have gone through all of the sessions!")
+    safelySaveDf(df, fn)
+
 
 
 def markReasonAndHistory(df, fn, name):
@@ -320,6 +406,12 @@ def markAllFields(df, fn, name):
                 if count % 10 == 0:
                     print("Total annotated scans this round:", count)
                     print()
+
+        elif clip == "skip":
+            print("Skipping report")
+            df.loc[idx, "confirm_clip"] = "skipped"
+            df.loc[idx, 'annotator'] = name
+ 
 
         nextStep = input("What would you like to do next? (n for next unannotated report/p for previous/r to redo current report/s for save/e for exit) ")
         idx, end = dealWithNext(df, fn, nextStep, 'confirm_clip', idx)
