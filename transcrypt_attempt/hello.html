@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+    <body>
+        <script type="module">
+            import {say_hello, clear_it} from "./__target__/hello.js";
+            document.getElementById("sayBtn").onclick = say_hello;
+            document.getElementById("clearBtn").onclick = clear_it;
+        </script>
+        <!-- Add the buttons -->
+        <button type="button" id="sayBtn">Click me!</button>
+        <button type="button" id="clearBtn">Clear</button>
+        <!-- Add spot for text to go -->
+        <div id="destination"></div>
+
+</html>

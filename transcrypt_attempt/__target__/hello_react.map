@@ -1,0 +1,8 @@
+{
+	"version": 3,
+	"file": "hello_react.js",
+	"sources": [
+		"hello_react.py"
+	],
+	"mappings": "AAAA;AAgCA;AAhCA;AAAA;AACA;AAEA;AACA;AAAA;AAAA;AAGA;AACA;AAAA;AAEA;AACA;AAAA;AAEA;AACA;AAAA;AAEA;AACA;AAAA;AAMA;AAAA;AAGA;AAGA;AAAA;AAGA;AAAA"
+}
