@@ -1,9 +1,11 @@
 ## Usage
 
-Get the data from Jenna. 
+1. Clone this repository to your computer.
+2. Make sure that the following libraries are installed
+  - `pandas`
+  - `numpy`
+3. Get the data from jmschabdach, it's not posted here. 
+4. In the directory containing this file, start a Jupyter server: `jupyter notebook`. The server should automatically open a tab in your web browser that looks like this directory.
+5. Open the file named `Radiology_Report_Rating_Notebook.ipynb`. It will load in a new tab.
+6. Follow the instructions at the top of the notebook to rate the severity of the pathology in a set of radiology reports.
 
-Do the training/reliability file first: `python reliabilityCli.py -f /path/to/reliability.csv -n "Your Name"`
-
-Then go ahead and work on the main file: `python annotatorCli.py -f /path/to/master.csv -n "Your Name"`
-
-If you somehow ran out of reports or only want to look at scan reasons and histories: `python scanReasonOnlyCli.py -f /path/to/master.csv -n "Your Name"`
