@@ -4,11 +4,22 @@ Thank you in advance for assisting in the CLIP curation process.
 
 CLIP is our clinical Cohort with Limited Imaging Pathology. The very first step of curating this dataset, before even looking at the images, is checking the reports written by the radiologists when the images were read clinically.
 
+Please read the entire README for instructions to contribute to this portion of CLIP curation.
+
 ## Requirements
 
 - Python 3.X
 - `pandas`
 - `numpy`
+- `jupyter notebook`
+
+The easiest way to set up your environment is to install conda on your computer, and then use conda to install the requirements. 
+
+1. Follow the instructions under the *Regular installation* header at this [link](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html).
+2. Open a command line/terminal prompt (if you're not familiar, this is the thing that the hacker in a movie uses).
+3. Run `conda install numpy`
+4. Run `conda install pandas` (should be installed in the previous step)
+5. Run `conda install jupyter-notebook`
 
 Please message your friendly lab tech support if you need help installing the requirements.
 
