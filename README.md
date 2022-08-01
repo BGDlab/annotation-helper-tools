@@ -1,10 +1,10 @@
 ## Introduction
 
-Thank you in advance for assisting in the CLIP curation process.
+Thank you in advance for assisting in the radiology report grading process.
 
-CLIP is our clinical Cohort with Limited Imaging Pathology. The very first step of curating this dataset, before even looking at the images, is checking the reports written by the radiologists when the images were read clinically.
+The very first step of curating our clinical datasets, before even looking at the images, involves checking the reports written by the radiologists when the images were read clinically.
 
-Please read the entire README for instructions to contribute to this portion of CLIP curation.
+Please read the entire README for instructions to contribute to the radiology report grading effort.
 
 ## Requirements
 
@@ -32,17 +32,17 @@ Contained in this directory are a Jupyter notebook, and a Python file:
 
 There are also 4 .csv files associated with this repo but not included in it:
 
-- training\_examples\_clip.csv
-- training\_examples\_not\_clip.csv
+- training\_examples\_no\_path.csv
+- training\_examples\_gross\_path.csv
 - training\_examples\_selfeval.csv
 - reliability\_ratings.csv
 
 
 Do NOT open the reliability ratings file in Excel or Sheets, but the other 3 .csv files can be opened in your spreadsheet software of choice. 
 
-The training examples clip/not clip files should be looked at first. They are meant to be references to 
+The training examples gross pathology/no pathology files should be looked at first. They are meant to be references to 
 1. Accustom you to the structure and language of radiology reports, and
-2. Provide examples of reports identified as CLIP or not CLIP.
+2. Provide examples of reports identified as having gross pathology or no pathology.
 
 Once you have a grasp for what types of reports are assigned to the CLIP and not CLIP groups, proceed to the training examples selfeval (self-evaluation). You may also open the selfeval file in the spreadsheet software of your choice. Hide the column labelled "confirm\_healthy" and add a new column at the end for your own rating practice. For each row, read the narrative text and impression text columns and note your rating (0/1/2, see next section) in your rating column. The goal is to practice reading and rating, but you can check your ratings with the ratings in the hidden column.
 
@@ -50,18 +50,18 @@ Once you have a grasp for what types of reports are assigned to the CLIP and not
 
 These examples are labelled as CLIP or not CLIP (True or False in the `confirm_clip` column). We are currently in the process of migrating from a binary system to a 3 label system:
 
-0 - NOT CLIP, pathology or conditions in the radiology report indicate the subject should not be considered for this data set
-1 - mild pathology, such as slightly enlarged ventricles, etc.
-2 - CLIP, the report contains an utter lack of pathology in the brain and the impression is "unremarkable"
+0 - Gross Pathology: conditions in the radiology report indicate the subject should not be considered for use in research
+1 - Mild Pathology, such as slightly enlarged ventricles, etc.
+2 - No Pathology: the report contains an utter lack of pathology in the brain and the impression is "unremarkable"
 
 
 Keywords (updated 2022-06-13):
 - Special Cases:
-  - Chiari malformation: is it small enough that there is no measurement, if it’s borderline, or if the brain is otherwise remarkable, the scan can be marked as CLIP. If there’s multiple things going on in addition to the Chiari malformation or the malformation has a measurement associated with it, it’s more likely a non-CLIP scan
-  - Outside Scan: Go ahead and mark those reports ("This is an outside scan") as non CLIP. Chances are we wouldn’t be able to get those scans since they didn’t actually happen at CHOP and there’s no way to confirm what’s going on in them
+  - Chiari malformation: is it small enough that there is no measurement, if it’s borderline, or if the brain is otherwise remarkable, the scan can be marked as no pathology. If there’s multiple things going on in addition to the Chiari malformation or the malformation has a measurement associated with it, it’s more likely a scan containing pathology
+  - Outside Scan: Go ahead and mark those reports ("This is an outside scan") as 0. Chances are we wouldn’t be able to get those scans since they didn’t actually happen at CHOP and there’s no way to confirm what’s going on in them
   - Otherwise unremarkable: check for other keywords in the
 
-- Not CLIP Keywords (Rating 0):
+- Gross Pathology Keywords (Rating 0):
   - chemo
   - craniectomy
   - craniotomy
@@ -72,7 +72,7 @@ Keywords (updated 2022-06-13):
   - astrocytoma
   - Most -omas, otomy, and -ectomy
   
-- Maybe CLIP Keywords (Rating 1):
+- Mild Pathology Keywords (Rating 1):
   - orthodontic hardware
   - motion/patient motion/patient movement/motion degrad/degraded by motion
   - patient motion/motion artifact
@@ -84,10 +84,10 @@ Keywords (updated 2022-06-13):
   - "slight enlargment"
   - "mild"
   
-- CLIP Keywords (Rating 2):
+- No Pathology Keywords (Rating 2):
   - Unremarkable brain/scan/MRI
   
-- Not relevant to CLIP:
+- Not relevant to pathology grades:
   - opacification of the sinus cavities
 
 
