@@ -98,11 +98,11 @@ def markClipStatusNewReports(df, fn, name, clearScreen=False, toHighlight=[]):
     safelySaveDf(df, fn)
 
 
-def markClipStatusSelfEval(df, fn, name, clearScreen=False, toHighlight=[]):
+def markClipStatusSelfEval(df, fn, name, clearScreen=False, toHighlight={}):
 
     # Initialize variables
     count = 0
-    indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON'] + toHighlight
+    indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON']
     end = False
 
     df, annotatorNameCol, annotatorRatingCol = checkForAnnotator(df, name)
@@ -123,7 +123,8 @@ def markClipStatusSelfEval(df, fn, name, clearScreen=False, toHighlight=[]):
             narr += "IMPRESSION:"+ row['impression_text']
     
         # Format the text - green, yellow, then red
-        narr = markYellowText(narr, indicators)
+        for key in sorted(toHighlight.keys()):
+            narr = markTextColor(narr, toHighlight[key], key)
 
         # Print the text
         print(narr)

@@ -41,32 +41,20 @@ def safelySaveDf(df, fn):
     except PermissionError:
         print("Error: write access to "+fn+" denied. Please check that the file is not locked by Datalad.")
         return False
+       
 
-
-def markRedText(line, toMark):
-    start = '\x1b[5;30;41m' # red background, bold black text
-    end = '\x1b[0m'
-
-    if line is np.nan:
-        return '<No report available.>'
-
-    if type(toMark) == str:
-        line = line.replace(toMark, start+toMark+end)
-        
-    elif type(toMark) == list:
-        for phrase in toMark:
-            line = line.replace(str(phrase), start+str(phrase)+end)
-    
-    else:
-        print("Error: the second argument must be either a string or a list of strings")
-        
-    return line
-
-        
-def markGreenText(line, toMark):    
-    start = '\x1b[5;30;42m' # green background, bold black text
-    end = '\x1b[0m'
+def markTextColor(line, toMark, color): 
+    if color == "green":
+        start = '\x1b[5;30;42m' # green background, bold black text
+    elif color == "yellow":
+        start = '\x1b[5;30;43m' # yellow background, bold black text
+    elif color == "red":
+        start = '\x1b[5;30;41m' # red background, bold black text
+    elif color == "gray" or color == "grey":
+        start = '\x1b[5;30;47m' # gray background, bold black text
  
+    end = '\x1b[0m'
+
     if line is np.nan:
         return '<No report available.>'
    
@@ -77,25 +65,6 @@ def markGreenText(line, toMark):
         for phrase in toMark:
             line = line.replace(str(phrase), start+str(phrase).upper()+end)
     
-    else:
-        print("Error: the second argument must be either a string or a list of strings")
-        
-    return line
-
-
-def markYellowText(line, toMark):
-    start = '\x1b[5;30;43m' # yellow background, bold black text
-    end = '\x1b[0m'
-    
-    if line is np.nan:
-        return '<No report available.>'
-
-    if type(toMark) == str:
-        line = line.replace(toMark, start+toMark+end)
-        
-    elif type(toMark) == list:
-        for phrase in toMark:
-            line = line.replace(str(phrase), start+str(phrase)+end)
     else:
         print("Error: the second argument must be either a string or a list of strings")
         
