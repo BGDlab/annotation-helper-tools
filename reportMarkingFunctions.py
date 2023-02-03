@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from annotationHelperLib import *
 from IPython.display import clear_output
-
+from google.cloud import bigquery # SQL table interface on Arcus
 
 def markClipStatusNewReports(df, fn, name, clearScreen=False, toHighlight=[]):
 
@@ -398,6 +398,48 @@ def markAllFields(df, fn, name):
 
     print("You have gone through all of the sessions!")
     safelySaveDf(df, fn)
+    
+    
+
+def markOneReportSQL(name, toHighlight = {}):
+
+    # Initialize the client service
+    client = bigquery.Client()
+    
+    # Get a row from the grader table for the specified rater that has not been graded yet
+    getSingleRowQuery = 'SELECT * FROM lab.grader_table WHERE grader_name like "' + name + '" and grade = 999 LIMIT 1'
+
+    df = client.query(getSingleRowQuery).to_dataframe()
+    
+    # Get the report for that proc_ord_id from the primary report table
+    getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+    reportDf = client.query(getReportRow).to_dataframe()
+
+
+    # Combine the narrative and impression text
+    reportText = reportDf['narrative_text'].values[0] 
+    if reportDf['impression_text'].values[0] != 'nan':
+        reportText += ' ' + reportDf['impression_text'].values[0]
+    
+    # If the user passed a dictionary of lists to highlight
+    if len(toHighlight.keys()) > 0:
+        for key in sorted(toHighlight.keys()):
+            reportText = markTextColor(reportText, toHighlight[key], key)
+            
+    # Print the report and ask for a grade
+    print(reportText)
+    print()
+    grade = str(input('Assign a CLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
+    print()
+    
+    # Update the grader table with the new grade
+    updateQuery = 'UPDATE lab.grader_table set grade = '+str(grade)
+    updateQuery += ' WHERE proc_ord_id = '+str(df['proc_ord_id'].values[0])
+    updateQuery += ' and grader_name like "' + name + '"'
+
+    updateJob = client.query(updateQuery)
+    updateJob.result()
+    print("Grade saved. Run the cell again to grade another report.")
 
 
 # Main
