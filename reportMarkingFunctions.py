@@ -440,6 +440,35 @@ def markOneReportSQL(name, toHighlight = {}):
     updateJob = client.query(updateQuery)
     updateJob.result()
     print("Grade saved. Run the cell again to grade another report.")
+    
+    
+def getMoreReportsToGrade(name):
+    # Initialize the client service
+    client = bigquery.Client()
+    
+    # Set up the query to get more reports for the specified person to annotate
+    addReportsQuery = "insert into lab.grader_table select " +
+    addReportsQuery += " distinct cast(source.proc_ord_id as int64), '"
+    addReportsQuery += name
+    addReportsQuery += "' as grader_name, 'Unique' as grade_category, "
+    addReportsQuery += "999 as grade, "
+    addReportsQuery += "from arcus.reports_annotations_master source "
+    addReportsQuery += "left outer join lab.grader_table filter "
+    addReportsQuery += "on cast(source.proc_ord_id as int64) = filter.proc_ord_id "
+    addReportsQuery += "where filter.proc_ord_id is null limit 100 ;"
+    
+    # Submit the query
+    supplementRaterReports = client.query(addReportsQuery)
+    supplementRaterReports.result()
+    
+    # Check: how many reports were added for the user?
+    getUserUnratedCount = 'SELECT * FROM lab.grader_table WHERE grader_name like "' + name + '" and grade = 999'
+
+    df = client.query(getSingleRowQuery).to_dataframe()
+    
+    # Inform the user
+    print(len(df), "reports were added for grader", name)
+    
 
 
 # Main
