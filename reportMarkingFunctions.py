@@ -4,6 +4,13 @@ from annotationHelperLib import *
 from IPython.display import clear_output
 from google.cloud import bigquery # SQL table interface on Arcus
 
+##
+# Mark CLIP status (0/1/2) for unmarked radiology reports
+# @param df A pandas DataFrame object containing radiology reports (hyperspecific format)
+# @param fn A str containing the full path to the file containing the radiology reports
+# @param name A str containing the full name of the grader (to also be referenced in publications)
+# @param clearScreen A boolean specifying whether or not to clear the screen after grading a report (default: False)
+# @param toHighlight A list of str to highlight if they appear in the report text
 def markClipStatusNewReports(df, fn, name, clearScreen=False, toHighlight=[]):
 
     # Initialize variables
@@ -11,6 +18,7 @@ def markClipStatusNewReports(df, fn, name, clearScreen=False, toHighlight=[]):
     indicators = ['CLINICAL', 'INDICATION', 'HISTORY', 'REASON'] + toHighlight
     end = False
 
+    # Check to see if the annotator already exists in the data frame
     df, annotatorNameCol, annotatorRatingCol = checkForAnnotator(df, name)
 
     # TODO dejankify this bit
@@ -52,6 +60,7 @@ def markClipStatusNewReports(df, fn, name, clearScreen=False, toHighlight=[]):
         # Get input from the user - is the patient CLIP
         clip = ""
 
+        # Only accept a grade if it is 0/1/2
         while not (clip == "0" or clip == "1" or clip == "2"):
             clip = str(input('Assign a CLIP rating to this report (0/1/2): '))
             print()
@@ -98,6 +107,13 @@ def markClipStatusNewReports(df, fn, name, clearScreen=False, toHighlight=[]):
     safelySaveDf(df, fn)
 
 
+##
+# Mark CLIP status (0/1/2) for reports in the self-eval
+# @param df A pandas DataFrame object containing radiology reports (hyperspecific format)
+# @param fn A str containing the full path to the file containing the radiology reports
+# @param name A str containing the full name of the grader (to also be referenced in publications)
+# @param clearScreen A boolean specifying whether or not to clear the screen after grading a report (default: False)
+# @param toHighlight A list of str to highlight if they appear in the report text
 def markClipStatusSelfEval(df, fn, name, clearScreen=False, toHighlight={}):
 
     # Initialize variables
@@ -178,6 +194,13 @@ def markClipStatusSelfEval(df, fn, name, clearScreen=False, toHighlight={}):
     print("You have gone through all of the sessions!")
     safelySaveDf(df, fn)
 
+##
+# Mark CLIP status (0/1/2) for unmarked radiology reports - Nadia specific (DEPRECATED)
+# @param df A pandas DataFrame object containing radiology reports (hyperspecific format)
+# @param fn A str containing the full path to the file containing the radiology reports
+# @param name A str containing the full name of the grader (to also be referenced in publications)
+# @param clearScreen A boolean specifying whether or not to clear the screen after grading a report (default: False)
+# @param toHighlight A list of str to highlight if they appear in the report text
 def nadiaMarkClipStatus(df, fn, name, clearScreen=False, toHighlight=[]):
 
     # Initialize variables
@@ -256,7 +279,11 @@ def nadiaMarkClipStatus(df, fn, name, clearScreen=False, toHighlight=[]):
     safelySaveDf(df, fn)
 
 
-
+##
+# Mark the reason for scan and any patient history
+# @param df A pandas DataFrame object containing radiology reports (hyperspecific format)
+# @param fn A str containing the full path to the file containing the radiology reports
+# @param name A str containing the full name of the grader (to also be referenced in publications)
 def markReasonAndHistory(df, fn, name):
 
     # Initialize variables
@@ -317,7 +344,12 @@ def markReasonAndHistory(df, fn, name):
     print("You have gone through all of the sessions!")
     safelySaveDf(df, fn)
 
-
+# Mark CLIP status (y/n) for unmarked radiology reports (DEPRECATED)
+# @param df A pandas DataFrame object containing radiology reports (hyperspecific format)
+# @param fn A str containing the full path to the file containing the radiology reports
+# @param name A str containing the full name of the grader (to also be referenced in publications)
+# @param clearScreen A boolean specifying whether or not to clear the screen after grading a report (default: False)
+# @param toHighlight A list of str to highlight if they appear in the report text
 def markAllFields(df, fn, name):
 
     # Initialize variables
@@ -400,7 +432,10 @@ def markAllFields(df, fn, name):
     safelySaveDf(df, fn)
     
     
-
+##
+# Pull the report associated with a proc_ord_id for which the specified grader has a grade of 999, and then grade the report. Modifies lab.grader_table
+# @param name A str containing the full name of the grader (to also be referenced in publications)
+# @param toHighlight A dictionary with str keys specifying a color to highlight the list of str text with
 def markOneReportSQL(name, toHighlight = {}):
 
     # Initialize the client service
@@ -441,7 +476,9 @@ def markOneReportSQL(name, toHighlight = {}):
     updateJob.result()
     print("Grade saved. Run the cell again to grade another report.")
     
-    
+##
+# Get more proc_ord_id for which no reports have been rated for the specified user to grade
+# @param name A str containing the full name of the grader (to also be referenced in publications)
 def getMoreReportsToGrade(name):
     # Initialize the client service
     client = bigquery.Client()
