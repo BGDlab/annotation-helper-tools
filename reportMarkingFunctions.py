@@ -484,7 +484,7 @@ def getMoreReportsToGrade(name):
     client = bigquery.Client()
     
     # Set up the query to get more reports for the specified person to annotate
-    addReportsQuery = "insert into lab.grader_table select " +
+    addReportsQuery = "insert into lab.grader_table select "
     addReportsQuery += " distinct cast(source.proc_ord_id as int64), '"
     addReportsQuery += name
     addReportsQuery += "' as grader_name, 'Unique' as grade_category, "
