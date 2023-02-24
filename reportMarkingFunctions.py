@@ -136,7 +136,7 @@ def markClipStatusSelfEval(df, fn, name, clearScreen=False, toHighlight={}):
         # Get the text to print
         narr = row['narrative_text']
         if not type(row['impression_text']) is float and not type(row['impression_text']) is np.float64:
-            narr += "IMPRESSION:"+ row['impression_text']
+            narr += "\nIMPRESSION:"+ row['impression_text']
     
         # Format the text - green, yellow, then red
         for key in sorted(toHighlight.keys()):
@@ -446,11 +446,14 @@ def markOneReportSQL(name, toHighlight = {}):
 
     df = client.query(getSingleRowQuery).to_dataframe()
     
+    if len(df) == 0:
+        print("There are currently no reports to grade for", name, " in the table. Please add more to continue.")
+        return
+    
     # Get the report for that proc_ord_id from the primary report table
     getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
     reportDf = client.query(getReportRow).to_dataframe()
-
-
+    
     # Combine the narrative and impression text
     reportText = reportDf['narrative_text'].values[0] 
     if reportDf['impression_text'].values[0] != 'nan':
@@ -484,16 +487,27 @@ def getMoreReportsToGrade(name):
     client = bigquery.Client()
     
     # Set up the query to get more reports for the specified person to annotate
-    addReportsQuery = "insert into lab.grader_table select "
-    addReportsQuery += " distinct cast(source.proc_ord_id as int64), '"
-    addReportsQuery += name
-    addReportsQuery += "' as grader_name, 'Unique' as grade_category, "
-    addReportsQuery += "999 as grade, "
-    addReportsQuery += "from arcus.reports_annotations_master source "
-    addReportsQuery += "left outer join lab.grader_table filter "
-    addReportsQuery += "on cast(source.proc_ord_id as int64) = filter.proc_ord_id "
-    addReportsQuery += "where filter.proc_ord_id is null limit 100 ;"
+    addReportsQuery = "insert into lab.grader_table "
+    # addReportsQuery += " distinct cast(source.proc_ord_id as int64), '"
+    # addReportsQuery += name
+    # addReportsQuery += "' as grader_name, 'Unique' as grade_category, "
+    # addReportsQuery += "999 as grade, "
+    # addReportsQuery += "from arcus.reports_annotations_master source "
+    # addReportsQuery += "left outer join lab.grader_table filter "
+    # addReportsQuery += "on cast(source.proc_ord_id as int64) = filter.proc_ord_id "
+    # addReportsQuery += "where filter.proc_ord_id is null limit 100 ;"
     
+    addReportsQuery += "with CTE as (select distinct cast(source.proc_ord_id as int64) as proc_ord_id, '" + name + "' as grader_name, 'Unique' as grade_category, 999 as grade, proc_ord_year, age_in_days,"
+    addReportsQuery += """from 
+                          arcus.reports_annotations_master source 
+                            left outer join
+                          lab.grader_table filter
+                          on cast(source.proc_ord_id as int64) = filter.proc_ord_id
+                          where filter.proc_ord_id is null
+                          order by source.proc_ord_year desc, source.age_in_days asc
+                          limit 100)
+                        select proc_ord_id, grader_name, grade_category, grade from CTE"""
+
     # Submit the query
     supplementRaterReports = client.query(addReportsQuery)
     supplementRaterReports.result()
@@ -501,12 +515,47 @@ def getMoreReportsToGrade(name):
     # Check: how many reports were added for the user?
     getUserUnratedCount = 'SELECT * FROM lab.grader_table WHERE grader_name like "' + name + '" and grade = 999'
 
-    df = client.query(getSingleRowQuery).to_dataframe()
+    df = client.query(getUserUnratedCount).to_dataframe()
     
     # Inform the user
     print(len(df), "reports were added for grader", name)
     
-
+def welcomeUser(name):
+    client = bigquery.Client()
+    
+    query = 'select * from lab.grader_table where grader_name like "' + name + '"'
+    
+    df = client.query(query).to_dataframe()
+        
+    if len(df) == 0:
+        print("Welcome,", name)
+        print("...")
+        
+        insertReliabilityQuery = 'insert into lab.grader_table select '
+        insertReliabilityQuery += 'distinct cast(proc_ord_id as int64) as proc_ord_id, "'
+        insertReliabilityQuery += name + '" as grader_name, "Reliability" as grade_category, '
+        insertReliabilityQuery += 'cast(clip_status_03 as int64) as grade, '
+        insertReliabilityQuery += 'from arcus.reliability_ratings;'
+        
+        updateJob = client.query(insertReliabilityQuery)
+        updateJob.result()
+        
+        print("Entries for your reliability ratings have been added to your list of reports to grade.")
+    
+    else:
+        print("Welcome back,", name)
+        print("...")
+        
+        getToRateCount = 'select * from lab.grader_table where grader_name like "'
+        getToRateCount += name + '" and grade = 999'
+        
+        raterUnratedDf = client.query(getToRateCount).to_dataframe()
+              
+        if len(raterUnratedDf) == 0:
+              print("You are caught up on your report ratings")
+              # TODO add function here to get more reports for the user
+        else:
+              print("You currently have", len(raterUnratedDf), "ungraded reports to work on.")
 
 # Main
 if __name__ == "__main__":
