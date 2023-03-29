@@ -44,6 +44,9 @@ def safelySaveDf(df, fn):
        
 
 def markTextColor(line, toMark, color): 
+    # Sort the list of strings to highlight by length (longest to shortest)
+    toMark = sorted(toMark, key=len)[::-1]
+    
     if color == "green":
         start = '\x1b[5;30;42m' # green background, bold black text
     elif color == "yellow":

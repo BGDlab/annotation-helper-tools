@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import random
 from annotationHelperLib import *
 from IPython.display import clear_output
 from google.cloud import bigquery # SQL table interface on Arcus
@@ -27,17 +28,19 @@ def jennaRegradeOneTrainingReportSQL(name, toHighlight = {}):
     # Combine the narrative and impression text
     reportText = df['narrative_text'].values[0] 
     if df['impression_text'].values[0] != 'nan':
-        reportText += ' ' + str(df['impression_text'].values[0])
+        reportText += ' IMPRESSION:' + str(df['impression_text'].values[0])
     
     # If the user passed a dictionary of lists to highlight
     if len(toHighlight.keys()) > 0:
-        for key in sorted(toHighlight.keys()):
+        for key in toHighlight.keys():
             reportText = markTextColor(reportText, toHighlight[key], key)
             
     # Print the report and ask for a grade
     print(reportText)
     print()
-    grade = str(input('Assign a CLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
+    grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
+    while grade != "0" and grade != "1" and grade != "2":
+        grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
     print()
     
     # Update the grader table with the new grade
@@ -58,6 +61,45 @@ def jennaRegradeOneTrainingReportSQL(name, toHighlight = {}):
     updateJob = client.query(updateQuery)
     updateJob.result()
     print("Grade saved. Run the cell again to grade another report.")
+    
+    
+##
+# Iteratively show the user all of the SLIP/non SLIP example reports in a random order (training step 1)
+# @param toHighlight A dictionary with str keys specifying a color to highlight the list of str text with
+def readSampleReports(toHighlight = {}):
+
+    # Initialize the client service
+    client = bigquery.Client()
+    
+    # Get the SLIP and non-SLIP example reports
+    getSlipExamples = 'SELECT * FROM lab.training_examples;'
+
+    slipDf = client.query(getSlipExamples).to_dataframe()
+
+    slipReportsList = [ row['narrative_text'] + '\n\nIMPRESSION: ' + str(row['impression_text']) + '\n\nReport given grade of ' + str(row['grade']) for i, row in slipDf.iterrows()]
+        
+    # Shuffle the list of all reports
+    random.shuffle(slipReportsList)
+    
+    # Iteratively print each report
+    for report in slipReportsList:
+        # If the user passed a dictionary of lists to highlight
+        if len(toHighlight.keys()) > 0:
+            reportText = report
+            for key in toHighlight.keys():
+                reportText = markTextColor(reportText, toHighlight[key], key)
+            
+            # Print the report and ask for a grade
+            print(reportText)
+        else:
+            print(report)
+    
+        print()
+    
+        confirm = str(input('After you read the report and understand its grade, press ENTER to continue to the next report.'))
+        clear_output()
+        
+    print('You have finished reading the example reports. Rerun this cell to read them again or proceed to the next section.')
     
     
 ##
@@ -85,17 +127,19 @@ def markSelfEvalReportSQL(name, toHighlight = {}):
     # Combine the narrative and impression text
     reportText = reportDf['narrative_text'].values[0] 
     if reportDf['impression_text'].values[0] != 'nan':
-        reportText += ' ' + reportDf['impression_text'].values[0]
+        reportText += ' IMPRESSION:' + reportDf['impression_text'].values[0]
     
     # If the user passed a dictionary of lists to highlight
     if len(toHighlight.keys()) > 0:
-        for key in sorted(toHighlight.keys()):
+        for key in toHighlight.keys():
             reportText = markTextColor(reportText, toHighlight[key], key)
             
     # Print the report and ask for a grade
     print(reportText)
     print()
-    grade = str(input('Assign a CLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
+    grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
+    while grade != "0" and grade != "1" and grade != "2":
+        grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
     print()
     
     # Update the grader table with the new grade
@@ -117,6 +161,22 @@ def markSelfEvalReportSQL(name, toHighlight = {}):
 
     updateJob = client.query(updateQuery)
     updateJob.result()
+    
+    # Print out the grade and reason Jenna gave the report
+    print()
+    truthQuery = 'SELECT grade, reason from lab.training_selfeval WHERE report_id like "'+str(df['report_id'].values[0])
+    truthQuery += '" and grader_name not like "'+name+'"'
+    
+    truthDf = client.query(truthQuery).to_dataframe()
+    print("For reference, other graders have given this report the following grades for the specified reasons:")
+    print()
+    for idx, row in truthDf.iterrows():
+        if int(row['grade']) != 999:
+            print("Grade:", row['grade'], "For reason:", row['reason'])
+    
+    print()
+    confirmContinue = str(input('Press enter to continue'))
+          
     print("Grade saved. Run the cell again to grade another report.")
     
 ##
@@ -144,17 +204,19 @@ def markOneReportSQL(name, toHighlight = {}):
     # Combine the narrative and impression text
     reportText = reportDf['narrative_text'].values[0] 
     if reportDf['impression_text'].values[0] != 'nan':
-        reportText += ' ' + reportDf['impression_text'].values[0]
+        reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]
     
     # If the user passed a dictionary of lists to highlight
     if len(toHighlight.keys()) > 0:
-        for key in sorted(toHighlight.keys()):
+        for key in toHighlight.keys():
             reportText = markTextColor(reportText, toHighlight[key], key)
             
     # Print the report and ask for a grade
     print(reportText)
     print()
-    grade = str(input('Assign a CLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
+    grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
+    while grade != "0" and grade != "1" and grade != "2":
+        grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
     print()
     
     # Update the grader table with the new grade
@@ -207,8 +269,36 @@ def getMoreReportsToGrade(name):
     # Inform the user
     print(len(df), "reports were added for grader", name)
     
+    
 def welcomeUser(name):
     client = bigquery.Client()
+    
+    query = 'select * from lab.training_selfeval where grader_name like"'+name+'"'
+    df = client.query(query).to_dataframe()
+    
+    if len(df) == 0: # the person has not done the training self-eval
+        print("Welcome,", name)
+        print("It appears you have yet to complete the self-evaluation. The self-evaluation is intended for you to practice grading radiology reports youself.")
+        print("After you enter a grade and a reason for that grade for the given report, the grades and reasons for that report by other users will be displayed.")
+        print("Your grade and reason will be added to that list.")
+        
+        insertSelfEvalQuery = 'insert into lab.training_selfeval select '
+        insertSelfEvalQuery += 'distinct report_id, 999 as grade, "'
+        insertSelfEvalQuery += name + '" as grader_name, "missing" as reason '
+        insertSelfEvalQuery += 'from lab.training_selfeval;'
+        
+        updateJob = client.query(insertSelfEvalQuery)
+        updateJob.result()
+        
+        return False
+        
+    elif len(df[df['grade'] == 999]) > 0: # the person has not finished the training self-eval
+        print("Welcome back,", name)
+        getToRateSelfEvalQuery = 'select * from lab.training_selfeval where grader_name like "' +name+'" and grade = 999'
+        selfEvalUnratedDf = client.query(getToRateSelfEvalQuery).to_dataframe()
+        print("You currently have", len(selfEvalUnratedDf), "ungraded self-evaluation reports to work on.")
+        
+        return False
     
     query = 'select * from lab.grader_table where grader_name like "' + name + '"'
     
@@ -243,6 +333,8 @@ def welcomeUser(name):
               # TODO add function here to get more reports for the user
         else:
               print("You currently have", len(raterUnratedDf), "ungraded reports to work on.")
+                
+    return True
 
 # Main
 if __name__ == "__main__":
