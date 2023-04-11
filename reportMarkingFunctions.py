@@ -336,6 +336,76 @@ def welcomeUser(name):
                 
     return True
 
+
+##
+# Add reports to grade for a user from a list of ids
+# @param procIds A list of proc_ord_ids specified by the user
+# @param name A string containing the identifier for the user
+# @param maxToAdd An int specifying the maximum number of reports to add
+def addReportsFromListForUser(procIds, name, maxToAdd=100):
+    # Set up variables
+    client = bigquery.Client()
+    reportsInTableStatus = {}
+    invalidIds = []
+    addedReports = 0
+    inTableReports = 0
+    queryValidIdSql = "SELECT * from arcus.reports_annotations_master WHERE cast(proc_ord_id as int64) = "
+    queryReportInTable = "SELECT * from lab.grader_table WHERE cast(proc_ord_id as int64) = "
+    
+    for procId in procIds:
+        queryInsertReport = "INSERT into lab.grader_table (proc_ord_id, grader_name, grade_category, grade)"
+        if addedReports >= maxToAdd:
+            break
+        
+        # First check: is the id valid?
+        dfValidId = client.query(queryValidIdSql+str(int(procId))+";").to_dataframe()
+        
+        if len(dfValidId) == 0:
+            print("Error")
+            invalidIds.append(procId)
+            continue
+            
+        # Second check: is the id already in the report table?
+        dfReportInTable = client.query(queryReportInTable+str(procId)+";").to_dataframe()
+        print(queryReportInTable+str(procId)+";")
+        if len(dfReportInTable) == 0:
+            # add the report to the table for the u
+            queryInsertReport += " VALUES (cast('"+str(procId)+"' as int64), '"+name+"', 'Unique', 999);"
+            addReportJob = client.query(queryInsertReport)
+            addReportJob.result()
+            addedReports += 1
+        elif len(dfReportInTable) == 1:
+            inTableReports += 1
+            grade = int(dfReportInTable['grade'].values[0])
+            grader = dfReportInTable['grader_name'].values[0]
+            print(dfReportInTable['grader_name'].values)
+            # look at the grade
+            if grade == 999:
+                print(grader)
+                if grader in list(reportsInTableStatus.keys()):
+                    reportsInTableStatus[grader] += 1
+                else:
+                    reportsInTableStatus[grader] = 1
+            else:
+                if str(grade) in list(reportsInTableStatus.keys()):
+                    reportsInTableStatus[str(grade)] += 1
+                else:
+                    reportsInTableStatus[str(grade)] = 1
+        else:
+            print("There is more than one entry for the specified id in the reports table")
+            
+            
+    # Finished adding reports
+    print(addedReports, "were added for", name, "from the provided list")
+    print(len(invalidIds), "were invalid procedure order ids")
+    print(inTableReports, "are already in the grader table:")
+    for key in reportsInTableStatus.keys():
+        if len(key) > 1:
+            print(key, "has", reportsInTableStatus[key], "of these reports assigned to them")
+        else:
+            print(reportsInTableStatus[key], "reports have been rated", key)
+            
+            
 # Main
 if __name__ == "__main__":
 
