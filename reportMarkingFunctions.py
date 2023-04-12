@@ -308,14 +308,22 @@ def welcomeUser(name):
         print("Welcome,", name)
         print("...")
         
-        insertReliabilityQuery = 'insert into lab.grader_table select '
-        insertReliabilityQuery += 'distinct cast(proc_ord_id as int64) as proc_ord_id, "'
-        insertReliabilityQuery += name + '" as grader_name, "Reliability" as grade_category, '
-        insertReliabilityQuery += 'cast(clip_status_03 as int64) as grade, '
-        insertReliabilityQuery += 'from arcus.reliability_ratings;'
+        for grade in range(3):
+            print(grade)
+            insertReliabilityQuery = "insert into lab.grader_table "
+            insertReliabilityQuery += "select "
+            insertReliabilityQuery += "distinct cast(proc_ord_id as int64), "
+            insertReliabilityQuery += "'"+name+"' as grader_name, "
+            insertReliabilityQuery += "'Reliability' as grade_category, "
+            insertReliabilityQuery += "999 as grade "
+            insertReliabilityQuery += "from lab.grader_table where "
+            insertReliabilityQuery += "grader_name = 'Jenna Schabdach' and "
+            insertReliabilityQuery += "grade_category = 'Reliability' and "
+            insertReliabilityQuery += "grade = "+str(grade) + " "
+            insertReliabilityQuery += "limit 50 ; "
         
-        updateJob = client.query(insertReliabilityQuery)
-        updateJob.result()
+            updateJob = client.query(insertReliabilityQuery)
+            updateJob.result()
         
         print("Entries for your reliability ratings have been added to your list of reports to grade.")
     
