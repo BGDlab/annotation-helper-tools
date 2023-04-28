@@ -242,24 +242,21 @@ def markOneReportSQL(name, toHighlight = {}):
 ##
 # Get more proc_ord_id for which no reports have been rated for the specified user to grade
 # @param name A str containing the full name of the grader (to also be referenced in publications)
-def getMoreReportsToGrade(name):
+def getMoreReportsToGrade(name, legacy=False):
     # Initialize the client service
     client = bigquery.Client()
     
+    if legacy:
+        source = "arcus.reports_annotations_master"
+    else:
+        source = "arcus.procedure_order"
+    
     # Set up the query to get more reports for the specified person to annotate
     addReportsQuery = "insert into lab.grader_table "
-    # addReportsQuery += " distinct cast(source.proc_ord_id as int64), '"
-    # addReportsQuery += name
-    # addReportsQuery += "' as grader_name, 'Unique' as grade_category, "
-    # addReportsQuery += "999 as grade, "
-    # addReportsQuery += "from arcus.reports_annotations_master source "
-    # addReportsQuery += "left outer join lab.grader_table filter "
-    # addReportsQuery += "on cast(source.proc_ord_id as int64) = filter.proc_ord_id "
-    # addReportsQuery += "where filter.proc_ord_id is null limit 100 ;"
     
-    addReportsQuery += "with CTE as (select distinct cast(source.proc_ord_id as int64) as proc_ord_id, '" + name + "' as grader_name, 'Unique' as grade_category, 999 as grade, proc_ord_year, age_in_days,"
-    addReportsQuery += """from 
-                          arcus.reports_annotations_master source 
+    addReportsQuery += "with CTE as (select distinct cast(source.proc_ord_id as int64) as proc_ord_id, '" + name + "' as grader_name, 'Unique' as grade_category, 999 as grade, proc_ord_year, age_in_days, from"
+    addReportsQuery += source 
+    addReportsQuery += """ source 
                             left outer join
                           lab.grader_table filter
                           on cast(source.proc_ord_id as int64) = filter.proc_ord_id
@@ -286,35 +283,7 @@ def welcomeUser(name):
     
     query = 'select * from lab.training_selfeval where grader_name like"'+name+'"'
     df = client.query(query).to_dataframe()
-    
-    if len(df) == 0: # the person has not done the training self-eval
-        print("Welcome,", name)
-        print("It appears you have yet to complete the self-evaluation. The self-evaluation is intended for you to practice grading radiology reports youself.")
-        print("After you enter a grade and a reason for that grade for the given report, the grades and reasons for that report by other users will be displayed.")
-        print("Your grade and reason will be added to that list.")
-        
-        insertSelfEvalQuery = 'insert into lab.training_selfeval select '
-        insertSelfEvalQuery += 'distinct report_id, 999 as grade, "'
-        insertSelfEvalQuery += name + '" as grader_name, "missing" as reason '
-        insertSelfEvalQuery += 'from lab.training_selfeval;'
-        
-        updateJob = client.query(insertSelfEvalQuery)
-        updateJob.result()
-        
-        return False
-        
-    elif len(df[df['grade'] == 999]) > 0: # the person has not finished the training self-eval
-        print("Welcome back,", name)
-        getToRateSelfEvalQuery = 'select * from lab.training_selfeval where grader_name like "' +name+'" and grade = 999'
-        selfEvalUnratedDf = client.query(getToRateSelfEvalQuery).to_dataframe()
-        print("You currently have", len(selfEvalUnratedDf), "ungraded self-evaluation reports to work on.")
-        
-        return False
-    
-    query = 'select * from lab.grader_table where grader_name like "' + name + '"'
-    
-    df = client.query(query).to_dataframe()
-        
+           
     if len(df) == 0:
         print("Welcome,", name)
         print("...")
@@ -362,7 +331,7 @@ def welcomeUser(name):
 # @param name A string containing the identifier for the user
 # @param maxToAdd An int specifying the maximum number of reports to add (default 100)
 # @param verbose A boolean flag indicating how much output to print to stdout (default False)
-def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False):
+def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False, legacy=False):
     # Set up variables
     client = bigquery.Client()
     reportsInTableStatus = {}
@@ -370,11 +339,17 @@ def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False):
     addedReports = 0
     inTableReports = 0
     reliabilityReports = 0
-    queryValidIdSql = "SELECT * from arcus.reports_annotations_master WHERE cast(proc_ord_id as int64) = "
+    if legacy:
+        source = "arcus.reports_annotations_master"
+    else:
+        source = "arcus.procedure_order"
+        
+    queryValidIdSql = "SELECT * from "+source+" source WHERE cast(proc_ord_id as int64) = "
     queryReportInTable = "SELECT * from lab.grader_table WHERE proc_ord_id = "
     
     for procId in procIds:
         queryInsertReport = "INSERT into lab.grader_table (proc_ord_id, grader_name, grade_category, grade)"
+        print(addedReports)
         if addedReports >= maxToAdd:
             break
         
@@ -436,7 +411,7 @@ def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False):
     # Finished adding reports
     print(addedReports, "were added for", name, "from the provided list")
     print(len(invalidIds), "were invalid procedure order ids")
-    print(inTableReports, "are already in the grader table:")
+    print(inTableReports, "reports from the list were already in the grader table:")
     for key in reportsInTableStatus.keys():
         if len(key) > 1:
             print(key, "has", reportsInTableStatus[key], "of these reports assigned to them")
