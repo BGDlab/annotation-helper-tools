@@ -219,6 +219,17 @@ def markOneReportSQL(name, toHighlight = {}):
         grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
     print()
     
+    # Ask the user to confirm the grade
+    confirmGrade = "999"
+    while confirmGrade != grade :
+        while confirmGrade != "0" and confirmGrade != "1" and confirmGrade != "2":
+            confirmGrade = str(input("Please confirm your grade by reentering it OR enter a revised value to change the grade: "))
+        if confirmGrade != grade:
+            grade = confirmGrade
+            confirmGrade = "999"
+            
+    print("Saving your grade of", grade, "for this report.")
+    
     # Update the grader table with the new grade
     updateQuery = 'UPDATE lab.grader_table set grade = '+str(grade)
     updateQuery += ' WHERE proc_ord_id = '+str(df['proc_ord_id'].values[0])
