@@ -344,80 +344,55 @@ def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False, legacy
     else:
         source = "arcus.procedure_order"
         
-    queryValidIdSql = "SELECT * from "+source+" source WHERE cast(proc_ord_id as int64) = "
-    queryReportInTable = "SELECT * from lab.grader_table WHERE proc_ord_id = "
+    # Check report ids for validity 
+    q = "SELECT * from "+source+" ;"
+    procDf = client.query(q).to_dataframe()
+    if verbose: print("Proc ord table:",procDf.shape)
+    validIds = [i for i in procIds if str(i) in procDf['proc_ord_id'].values]
+    if verbose: print("Number of valid ids:",len(validIds))
+        
+    # Get the list of report ids in the table
+    q = "SELECT * from lab.grader_table;"
+    graderDf = client.query(q).to_dataframe()
+    if verbose: print("Graded report table shape:",graderDf.shape)
     
-    for procId in procIds:
+    # Get the difference between the two lists
+    graderReports = list(graderDf['proc_ord_id'].values)
+    existingReports = [i for i in validIds if i in graderReports]
+    unqueuedReports = [i for i in validIds if i not in graderReports]
+    if verbose: print("Graded reports:", len(existingReports))
+    if verbose: print("Ungraded reports:", len(unqueuedReports))
+    
+    # Pull up to N reports not yet in the table
+    if len(unqueuedReports) >= maxToAdd: 
+        # More reports in to-add list than the max
+        toAdd = unqueuedReports[:maxToAdd]
+    else:
+        # Fewer reports in to-add list than the max
+        toAdd = unqueuedReports
+        
+    print("Preparing to add", len(toAdd), "reports for", name, "...")
+    
+    for r in toAdd:
+        # Add the report
         queryInsertReport = "INSERT into lab.grader_table (proc_ord_id, grader_name, grade_category, grade)"
-        print(addedReports)
-        if addedReports >= maxToAdd:
-            break
+        queryInsertReport += " VALUES (cast('"+str(r)+"' as int64), '"+name+"', 'Unique', 999);"
+        addReportJob = client.query(queryInsertReport)
+        addReportJob.result()
         
-        # First check: is the id valid?
-        dfValidId = client.query(queryValidIdSql+str(int(procId))+";").to_dataframe()
-        
-        if len(dfValidId) == 0:
-            print("Error: invalid proc_ord_id", procId)
-            invalidIds.append(procId)
-            continue
-            
-        # Second check: is the id already in the report table?
-        dfReportInTable = client.query(queryReportInTable+str(procId)+";").to_dataframe()
-        if dfReportInTable.shape[0] == 0:
-            if verbose:
-                print("New report:", procId)
-            # add the report to the table for the u
-            queryInsertReport += " VALUES (cast('"+str(procId)+"' as int64), '"+name+"', 'Unique', 999);"
-            addReportJob = client.query(queryInsertReport)
-            addReportJob.result()
-            addedReports += 1
-        elif dfReportInTable.shape[0] == 1:
-            if verbose:
-                print("There is EXACTLY one entry for proc_ord_id", procId, "in the reports table")
-            inTableReports += 1
-            grade = dfReportInTable['grade'].values[0]
-            grader = dfReportInTable['grader_name'].values[0]
-            reportType = dfReportInTable['grade_category'].values[0]
-            
-            # Check the report type
-            if reportType == 'Reliability':
-                print("Error: proc_ord_id", procId, "exists in the EXACTLY once as a reliability report.")
-            else:
-                # look at the grade
-                if grade == 999: # ungraded
-                    if grader in list(reportsInTableStatus.keys()):
-                        reportsInTableStatus[grader] += 1
-                    else:
-                        reportsInTableStatus[grader] = 1
-                else: # graded by someone else
-                    if str(grade) in list(reportsInTableStatus.keys()):
-                        reportsInTableStatus[str(grade)] += 1
-                    else:
-                        reportsInTableStatus[str(grade)] = 1
-        else:            
-            inTableReports += 1
-            grade = list(dfReportInTable['grade'].values)
-            grader = list(dfReportInTable['grader_name'].values)
-            reportType = list(dfReportInTable['grade_category'].values)
-            
-            if 'Reliability' in reportType:
-                if verbose:
-                    print("proc_ord_id", procId, "is a report used for reliability ratings")
-                reliabilityReports += 1
-            else:
-                print("Warning: the report with proc_ord_id", procId, "is already in the grading table for multiple graders")
-            
-            
-    # Finished adding reports
-    print(addedReports, "were added for", name, "from the provided list")
-    print(len(invalidIds), "were invalid procedure order ids")
-    print(inTableReports, "reports from the list were already in the grader table:")
-    for key in reportsInTableStatus.keys():
-        if len(key) > 1:
-            print(key, "has", reportsInTableStatus[key], "of these reports assigned to them")
-        else:
-            print(reportsInTableStatus[key], "reports have been rated", key)
-    print(reliabilityReports, "reports are used for reliability ratings")
+    print(len(toAdd), "were added for", name)
+
+    # For the reports already in the table: get their statuses
+    if len(existingReports) > 0:
+        print(len(existingReports), "reports are already in the table:")
+        gradedReports = graderDf[graderDf['proc_ord_id'].isin(existingReports)]
+        if verbose: print(gradedReports.shape)
+        # grade values
+        for g in range(3):
+            print(gradedReports[gradedReports['grade'] == g].shape[0], "were graded", g)
+        # graders
+        for name in list(set(gradedReports['grader_name'].values)):
+            print(gradedReports[(gradedReports['grade'] == 999) & (gradedReports['grader_name'] == name)].shape[0], "have been assigned to", name)
             
             
 # Main
