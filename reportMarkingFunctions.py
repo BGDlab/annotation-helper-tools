@@ -279,17 +279,31 @@ def getMoreReportsToGrade(name, legacy=False):
     
     
 def welcomeUser(name):
+    print("Welcome,", name)
+
+    
     client = bigquery.Client()
     
-    query = 'select * from lab.training_selfeval where grader_name like"'+name+'"'
-    df = client.query(query).to_dataframe()
-           
-    if len(df) == 0:
-        print("Welcome,", name)
-        print("...")
+    # POssibly pull this bit into its own function - make it user proof
+    qCheckSelfEval = 'select * from lab.training_selfeval where grader_name like"'+name+'"'
+    selfEvalDf = client.query(qCheckSelfEval).to_dataframe()
+    
+    if len(selfEvalDf) == 0:
+        print("It appears you have yet to do the self-evaluation. Please grade those reports before continuing.")
+        # break
         
+    elif 999 in selfEvalDf['grade'].values:
+        print("It appears you have started the self-evaluation but have not finished it. Please grade those reports before continuing.")
+        # break
+    
+    
+    qReliability = 'select * from lab.grader_table where grade_category = "Reliability" and grader_name like"'+name+'"'
+    reliabilityDf = client.query(qReliability).to_dataframe()
+           
+    if len(reliabilityDf) == 0:  # to add: check if any self-eval reports have not been graded      
+        print("It appears you have yet to do grade the reliability reports. They are being added to your queue now.")
         for grade in range(3):
-            print(grade)
+            print("Adding for grade", grade)
             insertReliabilityQuery = "insert into lab.grader_table "
             insertReliabilityQuery += "select "
             insertReliabilityQuery += "distinct cast(proc_ord_id as int64), "
@@ -304,12 +318,12 @@ def welcomeUser(name):
         
             updateJob = client.query(insertReliabilityQuery)
             updateJob.result()
-        
-        print("Entries for your reliability ratings have been added to your list of reports to grade.")
+            
+    elif 999 in reliabilityDf['grade'].values:
+        reliabilityCount = len(reliabilityDf[reliabilityDf['grade'] == 999])
+        print("You have", reliabilityCount, "reliability reports to grade.")
     
     else:
-        print("Welcome back,", name)
-        print("...")
         
         getToRateCount = 'select * from lab.grader_table where grader_name like "'
         getToRateCount += name + '" and grade = 999'
