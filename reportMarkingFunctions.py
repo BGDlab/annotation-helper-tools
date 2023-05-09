@@ -201,10 +201,23 @@ def markOneReportSQL(name, toHighlight = {}):
     getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
     reportDf = client.query(getReportRow).to_dataframe()
     
-    # Combine the narrative and impression text
-    reportText = reportDf['narrative_text'].values[0] 
-    if reportDf['impression_text'].values[0] != 'nan':
-        reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]
+    # If the id was in the original table:
+    if len(reportDf) == 1:
+        # Combine the narrative and impression text
+        reportText = reportDf['narrative_text'].values[0] 
+        if reportDf['impression_text'].values[0] != 'nan':
+            reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]
+            
+    elif len(reportDf) == 0:
+        getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+        reportText = client.query(getReportRow).to_dataframe()['narrative_text']
+        
+        getReportRow = 'SELECT * FROM arcus.procedure_order_impression where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+        reportDf = client.query(getReportRow).to_dataframe()
+        
+        if len(reportDf) == 1:
+            reportText += "\n\nIMPRESSION: " + reportDf['impression_text'].values[0]
+        
     
     # If the user passed a dictionary of lists to highlight
     if len(toHighlight.keys()) > 0:
