@@ -346,6 +346,7 @@ def welcomeUser(name):
 # @param maxToAdd An int specifying the maximum number of reports to add (default 100)
 # @param verbose A boolean flag indicating how much output to print to stdout (default False)
 def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False, legacy=False):
+    print("Note: this cell may take several minutes to run. This is expected behavior.")
     # Set up variables
     client = bigquery.Client()
     reportsInTableStatus = {}
@@ -359,19 +360,22 @@ def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False, legacy
         source = "arcus.procedure_order"
         
     # Check report ids for validity 
+    print("Checking the list of ids to make sure each is valid...")
     q = "SELECT * from "+source+" ;"
     procDf = client.query(q).to_dataframe()
     if verbose: print("Proc ord table:",procDf.shape)
     validIds = [i for i in procIds if str(i) in procDf['proc_ord_id'].values]
     if verbose: print("Number of valid ids:",len(validIds))
+    print("Validity check completed.")
         
     # Get the list of report ids in the table
+    print("Checking to see how many requested reports have been graded or are in the grading queue...")
     q = "SELECT * from lab.grader_table;"
     graderDf = client.query(q).to_dataframe()
     if verbose: print("Graded report table shape:",graderDf.shape)
     
     # Get the difference between the two lists
-    graderReports = list(graderDf['proc_ord_id'].values)
+    graderReports = graderDf['proc_ord_id'].values
     existingReports = [i for i in validIds if i in graderReports]
     unqueuedReports = [i for i in validIds if i not in graderReports]
     if verbose: print("Graded reports:", len(existingReports))
@@ -406,7 +410,8 @@ def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False, legacy
             print(gradedReports[gradedReports['grade'] == g].shape[0], "were graded", g)
         # graders
         for name in list(set(gradedReports['grader_name'].values)):
-            print(gradedReports[(gradedReports['grade'] == 999) & (gradedReports['grader_name'] == name)].shape[0], "have been assigned to", name)
+            numToGrade = gradedReports[(gradedReports['grade'] == 999) & (gradedReports['grader_name'] == name)].shape[0]
+            if numToGrade > 0: print(numToGrade, "are already assigned to", name)
             
             
 # Main
