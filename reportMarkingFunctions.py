@@ -426,6 +426,26 @@ def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False, legacy
             numToGrade = gradedReports[(gradedReports['grade'] == 999) & (gradedReports['grader_name'] == name)].shape[0]
             if numToGrade > 0: print(numToGrade, "are already assigned to", name)
             
+
+def getGraderStatusReport(name):
+    client = bigquery.Client()
+    
+    query = "select * from lab.grader_table where "
+    query += "grader_name = '"+ name +"';"
+    
+    df = client.query(query).to_dataframe()
+    
+    # Reliability ratings
+    numReliability = df[df['grade_category'] == 'Reliability'].shape[0]
+    print(name, "has graded", numReliability, "of 150 reliability reports") # TODO: make this bit match the set reliability report ids
+    
+    # Unique
+    uniqueReportsDf = df[df['grade_category'] == 'Unique']
+    print(name, "has graded", uniqueReportsDf.shape[0], "unique reports where")
+    for grade in range(3):
+        numGraded = uniqueReportsDf[uniqueReportsDf['grade'] == grade].shape[0]
+        print(numGraded, "have been given a grade of", grade)
+        
             
 # Main
 if __name__ == "__main__":
