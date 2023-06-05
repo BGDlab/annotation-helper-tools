@@ -315,22 +315,7 @@ def welcomeUser(name):
            
     if len(reliabilityDf) == 0:  # to add: check if any self-eval reports have not been graded      
         print("It appears you have yet to do grade the reliability reports. They are being added to your queue now.")
-        for grade in range(3):
-            print("Adding for grade", grade)
-            insertReliabilityQuery = "insert into lab.grader_table "
-            insertReliabilityQuery += "select "
-            insertReliabilityQuery += "distinct cast(proc_ord_id as int64), "
-            insertReliabilityQuery += "'"+name+"' as grader_name, "
-            insertReliabilityQuery += "'Reliability' as grade_category, "
-            insertReliabilityQuery += "999 as grade "
-            insertReliabilityQuery += "from lab.grader_table where "
-            insertReliabilityQuery += "grader_name = 'Jenna Schabdach' and "
-            insertReliabilityQuery += "grade_category = 'Reliability' and "
-            insertReliabilityQuery += "grade = "+str(grade) + " "
-            insertReliabilityQuery += "limit 50 ; "
-        
-            updateJob = client.query(insertReliabilityQuery)
-            updateJob.result()
+        addReliabilityReports(name)
             
     elif 999 in reliabilityDf['grade'].values:
         reliabilityCount = len(reliabilityDf[reliabilityDf['grade'] == 999])
@@ -427,6 +412,46 @@ def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False, legacy
             if numToGrade > 0: print(numToGrade, "are already assigned to", name)
             
 
+            
+def addReliabilityReports(name):
+    client = bigquery.Client()
+
+    query = """
+    with cte as (
+      select
+        distinct(proc_ord_id) as proc_ord_id,
+        grader_name
+      from
+        lab.grader_table
+      where
+        grade_category = 'Reliability'
+        and grader_name = 'Megan M. Himes'
+    )
+    select
+      main.proc_ord_id
+    from
+      lab.grader_table main
+      inner join cte on main.proc_ord_id = cte.proc_ord_id
+    where
+      main.grader_name = "Alesandra Gorgone"
+    """
+
+    reliabilityDf = client.query(query).to_dataframe()
+    reliabilityIds = list(reliabilityDf['proc_ord_id'].values)
+
+    queryInsertReport = "INSERT into lab.grader_table (proc_ord_id, grader_name, grade_category, grade) VALUES"
+
+    for r in sorted(reliabilityIds)[:-1]:
+        # Add the report
+        queryInsertReport += " (cast('"+str(r)+"' as int64), '"+name+"', 'Reliability', 999),"
+
+
+    queryInsertReport = queryInsertReport[:-1] + ";"
+    print(queryInsertReport)
+    addReportJob = client.query(queryInsertReport)
+    addReportJob.result()
+            
+            
 def getGraderStatusReport(name):
     client = bigquery.Client()
     
