@@ -466,9 +466,10 @@ def getGraderStatusReport(name):
     
     # Unique
     uniqueReportsDf = df[df['grade_category'] == 'Unique']
-    print(name, "has graded", uniqueReportsDf.shape[0], "unique reports where")
+    gradedUniqueReportsDf = df[(df['grade_category'] == 'Unique') & (df['grade'] != 999)]
+    print(name, "has graded", gradedUniqueReportsDf.shape[0], "unique reports of", uniqueReportsDf.shape[0], "assigned where")
     for grade in range(3):
-        numGraded = uniqueReportsDf[uniqueReportsDf['grade'] == grade].shape[0]
+        numGraded = gradedUniqueReportsDf[gradedUniqueReportsDf['grade'] == grade].shape[0]
         print(numGraded, "have been given a grade of", grade)
         
             
