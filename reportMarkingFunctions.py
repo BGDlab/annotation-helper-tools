@@ -316,10 +316,12 @@ def welcomeUser(name):
     if len(reliabilityDf) == 0:  # to add: check if any self-eval reports have not been graded      
         print("It appears you have yet to do grade the reliability reports. They are being added to your queue now.")
         addReliabilityReports(name)
+        return False
             
     elif 999 in reliabilityDf['grade'].values:
         reliabilityCount = len(reliabilityDf[reliabilityDf['grade'] == 999])
         print("You have", reliabilityCount, "reliability reports to grade.")
+        return False
     
     else:
         
@@ -334,7 +336,7 @@ def welcomeUser(name):
         else:
               print("You currently have", len(raterUnratedDf), "ungraded reports to work on.")
                 
-    return True
+        return True
 
 
 ##
