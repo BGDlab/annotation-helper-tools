@@ -188,10 +188,15 @@ def markOneReportSQL(name, toHighlight = {}):
     # Initialize the client service
     client = bigquery.Client()
     
-    # Get a row from the grader table for the specified rater that has not been graded yet
-    getSingleRowQuery = 'SELECT * FROM lab.grader_table WHERE grader_name like "' + name + '" and grade = 999 LIMIT 1'
-
+    # Get a row from the grader table for the specified rater that has not been graded yet - start with Reliability
+    getSingleRowQuery = 'SELECT * FROM lab.grader_table WHERE grader_name = "' + name + '" and grade = 999 and grade_category = "Reliability" LIMIT 1'
     df = client.query(getSingleRowQuery).to_dataframe()
+    
+    if len(df) == 0:
+        # Get a row from the grader table for the specified rater that has not been graded yet - if no Reliability, then Unique
+        getSingleRowQuery = 'SELECT * FROM lab.grader_table WHERE grader_name = "' + name + '" and grade = 999 and grade_category = "Unique" LIMIT 1'
+        df = client.query(getSingleRowQuery).to_dataframe()
+        
     
     if len(df) == 0:
         print("There are currently no reports to grade for", name, " in the table. Please add more to continue.")
@@ -316,12 +321,10 @@ def welcomeUser(name):
     if len(reliabilityDf) == 0:  # to add: check if any self-eval reports have not been graded      
         print("It appears you have yet to do grade the reliability reports. They are being added to your queue now.")
         addReliabilityReports(name)
-        return False
             
     elif 999 in reliabilityDf['grade'].values:
         reliabilityCount = len(reliabilityDf[reliabilityDf['grade'] == 999])
         print("You have", reliabilityCount, "reliability reports to grade.")
-        return False
     
     else:
         
@@ -336,7 +339,7 @@ def welcomeUser(name):
         else:
               print("You currently have", len(raterUnratedDf), "ungraded reports to work on.")
                 
-        return True
+    return True
 
 
 ##
