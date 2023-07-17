@@ -4,64 +4,7 @@ import random
 from annotationHelperLib import *
 from IPython.display import clear_output
 from google.cloud import bigquery # SQL table interface on Arcus
-
-
-    
-##
-# Pull the report associated with a proc_ord_id for which the specified grader has a grade of 999, and then grade the report. Modifies lab.grader_table
-# @param name A str containing the full name of the grader (to also be referenced in publications)
-# @param toHighlight A dictionary with str keys specifying a color to highlight the list of str text with
-def jennaRegradeOneTrainingReportSQL(name, toHighlight = {}):
-
-    # Initialize the client service
-    client = bigquery.Client()
-    
-    # Get a row from the grader table for the specified rater that has not been graded yet
-    getSingleRowQuery = 'SELECT * FROM lab.training_examples WHERE grade = 999 LIMIT 1'
-
-    df = client.query(getSingleRowQuery).to_dataframe()
-    
-    if len(df) == 0:
-        print("There are currently no ungraded training reports.")
-        return
-    
-    # Combine the narrative and impression text
-    reportText = df['narrative_text'].values[0] 
-    if df['impression_text'].values[0] != 'nan':
-        reportText += ' IMPRESSION:' + str(df['impression_text'].values[0])
-    
-    # If the user passed a dictionary of lists to highlight
-    if len(toHighlight.keys()) > 0:
-        for key in toHighlight.keys():
-            reportText = markTextColor(reportText, toHighlight[key], key)
-            
-    # Print the report and ask for a grade
-    print(reportText)
-    print()
-    grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
-    while grade != "0" and grade != "1" and grade != "2":
-        grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
-    print()
-    
-    # Update the grader table with the new grade
-    updateQuery = 'UPDATE lab.training_examples set grade = '+str(grade)
-    updateQuery += ' WHERE report_id like "'+str(df['report_id'].values[0]) + '"'
-
-    updateJob = client.query(updateQuery)
-    updateJob.result()
-
-    # Ask for a reason the report was given the grade it was
-    reason = str(input('Why does this report get that grade? '))
-    print()
-
-    # Update the grader table with the new grade
-    updateQuery = 'UPDATE lab.training_examples set reason="'+ reason + '"'
-    updateQuery += ' WHERE report_id like "'+str(df['report_id'].values[0]) + '"'
-
-    updateJob = client.query(updateQuery)
-    updateJob.result()
-    print("Grade saved. Run the cell again to grade another report.")
-    
+ 
     
 ##
 # Iteratively show the user all of the SLIP/non SLIP example reports in a random order (training step 1)
@@ -183,18 +126,18 @@ def markSelfEvalReportSQL(name, toHighlight = {}):
 # Pull the report associated with a proc_ord_id for which the specified grader has a grade of 999, and then grade the report. Modifies lab.grader_table
 # @param name A str containing the full name of the grader (to also be referenced in publications)
 # @param toHighlight A dictionary with str keys specifying a color to highlight the list of str text with
-def markOneReportSQL(name, toHighlight = {}):
+def markOneReportSQL(name, project, toHighlight = {}):
 
     # Initialize the client service
     client = bigquery.Client()
     
     # Get a row from the grader table for the specified rater that has not been graded yet - start with Reliability
-    getSingleRowQuery = 'SELECT * FROM lab.grader_table WHERE grader_name = "' + name + '" and grade = 999 and grade_category = "Reliability" LIMIT 1'
+    getSingleRowQuery = 'SELECT * FROM lab.grader_table_with_metadata WHERE grader_name = "' + name + '" and grade = 999 and grade_category = "Reliability" LIMIT 1'
     df = client.query(getSingleRowQuery).to_dataframe()
     
     if len(df) == 0:
         # Get a row from the grader table for the specified rater that has not been graded yet - if no Reliability, then Unique
-        getSingleRowQuery = 'SELECT * FROM lab.grader_table WHERE grader_name = "' + name + '" and grade = 999 and grade_category = "Unique" LIMIT 1'
+        getSingleRowQuery = 'SELECT * FROM lab.grader_table_with_metadata WHERE grader_name = "' + name + '" and grade = 999 and grade_category = "Unique" LIMIT 1'
         df = client.query(getSingleRowQuery).to_dataframe()
         
     
@@ -203,17 +146,13 @@ def markOneReportSQL(name, toHighlight = {}):
         return
     
     # Get the report for that proc_ord_id from the primary report table
-    getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+    getReportRow = 'SELECT * FROM arcus.procedure_order where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
     reportDf = client.query(getReportRow).to_dataframe()
     
-    # If the id was in the original table:
+    # If the id was in the new table:
     if len(reportDf) == 1:
-        # Combine the narrative and impression text
-        reportText = reportDf['narrative_text'].values[0] 
-        if reportDf['impression_text'].values[0] != 'nan':
-            reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]
-            
-    elif len(reportDf) == 0:
+        originTable = "arcus.procedure_order"
+        
         getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
         reportText = client.query(getReportRow).to_dataframe()['narrative_text'].values[0]
         
@@ -222,6 +161,17 @@ def markOneReportSQL(name, toHighlight = {}):
         
         if len(reportDf) == 1:
             reportText += "\n\nIMPRESSION: " + reportDf['impression_text'].values[0]
+            
+    elif len(reportDf) == 0:
+        getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+        reportDf = client.query(getReportRow).to_dataframe()
+        
+        if len(reportDf) > 0: 
+            originTable = "arcus.reports_annotations_master"
+            # Combine the narrative and impression text
+            reportText = reportDf['narrative_text'].values[0] 
+            if reportDf['impression_text'].values[0] != 'nan':
+                reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]        
         
     
     # If the user passed a dictionary of lists to highlight
@@ -248,9 +198,10 @@ def markOneReportSQL(name, toHighlight = {}):
             
     print("Saving your grade of", grade, "for this report.")
     
+    # LOH - do more changes need to be made here to change the metadata in the table? I think no but ...
     # Update the grader table with the new grade
-    updateQuery = 'UPDATE lab.grader_table set grade = '+str(grade)
-    updateQuery += ' WHERE proc_ord_id = '+str(df['proc_ord_id'].values[0])
+    updateQuery = 'UPDATE lab.grader_table_with_metadata set grade = '+str(grade)
+    updateQuery += ' WHERE proc_ord_id = "'+str(df['proc_ord_id'].values[0])+'"' 
     updateQuery += ' and grader_name like "' + name + '"'
 
     updateJob = client.query(updateQuery)
@@ -260,35 +211,35 @@ def markOneReportSQL(name, toHighlight = {}):
 ##
 # Get more proc_ord_id for which no reports have been rated for the specified user to grade
 # @param name A str containing the full name of the grader (to also be referenced in publications)
-def getMoreReportsToGrade(name, legacy=False):
+def getMoreReportsToGrade(name, project, legacy=False):
     # Initialize the client service
     client = bigquery.Client()
+        
+    # Set up the query to get more reports for the specified person to annotate 
+    addReportsQuery = "insert into lab.grader_table_with_metadata select distinct source.proc_ord_id, "
+    addReportsQuery += name +" as grader_name, 999 as grade, 'Unique' as grade_category, pat_id, "
+    addReportsQuery += "age_in_days, cast(proc_ord_year as int64) as proc_ord_year, "
     
     if legacy:
-        source = "arcus.reports_annotations_master"
+        addReportsQuery += "proc_name, 'arcus.reports_annotations_master' as report_origin_table, '"
+        addReportsQuery += project + "' as project "
+        addReportsQuery += "from arcus.reports_annotations_master source "
+        
     else:
-        source = "arcus.procedure_order"
-    
-    # Set up the query to get more reports for the specified person to annotate
-    addReportsQuery = "insert into lab.grader_table "
-    
-    addReportsQuery += "with CTE as (select distinct cast(source.proc_ord_id as int64) as proc_ord_id, '" + name + "' as grader_name, 'Unique' as grade_category, 999 as grade, proc_ord_year, age_in_days, from"
-    addReportsQuery += source 
-    addReportsQuery += """ source 
-                            left outer join
-                          lab.grader_table filter
-                          on cast(source.proc_ord_id as int64) = filter.proc_ord_id
-                          where filter.proc_ord_id is null
-                          order by source.proc_ord_year desc, source.age_in_days asc
-                          limit 100)
-                        select proc_ord_id, grader_name, grade_category, grade from CTE"""
+        addReportsQuery += "proc_ord_desc as proc_name, 'arcus.procedure_order' as report_origin_table "
+        addReportsQuery += project + "' as project "
+        addReportsQuery += "from arcus.procedure_order source "
+        
+    addReportsQuery += "left outer join lab.grader_table filter on filter.proc_ord_id = source.proc_ord_id "
+    addReportsQuery += "where filter.proc_ord_id is null "
+    addReportsQuery += "order by source.proc_ord_year desc, source.proc_ord_age asc limit 10;"
 
     # Submit the query
     supplementRaterReports = client.query(addReportsQuery)
     supplementRaterReports.result()
     
     # Check: how many reports were added for the user?
-    getUserUnratedCount = 'SELECT * FROM lab.grader_table WHERE grader_name like "' + name + '" and grade = 999'
+    getUserUnratedCount = 'SELECT * FROM lab.grader_table_with_metadata WHERE grader_name like "' + name + '" and grade = 999'
 
     df = client.query(getUserUnratedCount).to_dataframe()
     
@@ -298,11 +249,10 @@ def getMoreReportsToGrade(name, legacy=False):
     
 def welcomeUser(name):
     print("Welcome,", name)
-
-    
+   
     client = bigquery.Client()
     
-    # POssibly pull this bit into its own function - make it user proof
+    # Possibly pull this bit into its own function - make it user proof
     qCheckSelfEval = 'select * from lab.training_selfeval where grader_name like"'+name+'"'
     selfEvalDf = client.query(qCheckSelfEval).to_dataframe()
     
@@ -314,12 +264,11 @@ def welcomeUser(name):
         print("It appears you have started the self-evaluation but have not finished it. Please grade those reports before continuing.")
         # break
     
-    
-    qReliability = 'select * from lab.grader_table where grade_category = "Reliability" and grader_name like"'+name+'"'
+    qReliability = 'select * from lab.grader_table_with_metadata where grade_category = "Reliability" and grader_name like"'+name+'"'
     reliabilityDf = client.query(qReliability).to_dataframe()
            
-    if len(reliabilityDf) == 0:  # to add: check if any self-eval reports have not been graded      
-        print("It appears you have yet to do grade the reliability reports. They are being added to your queue now.")
+    if not checkReliabilityRatings(reliabilityDf):       
+        print("It appears you have yet to grade the reliability reports.")
         addReliabilityReports(name)
             
     elif 999 in reliabilityDf['grade'].values:
@@ -327,8 +276,7 @@ def welcomeUser(name):
         print("You have", reliabilityCount, "reliability reports to grade.")
     
     else:
-        
-        getToRateCount = 'select * from lab.grader_table where grader_name like "'
+        getToRateCount = 'select * from lab.grader_table_with_metadata where grader_name like "'
         getToRateCount += name + '" and grade = 999'
         
         raterUnratedDf = client.query(getToRateCount).to_dataframe()
@@ -348,7 +296,7 @@ def welcomeUser(name):
 # @param name A string containing the identifier for the user
 # @param maxToAdd An int specifying the maximum number of reports to add (default 100)
 # @param verbose A boolean flag indicating how much output to print to stdout (default False)
-def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False, legacy=False):
+def addReportsFromListForUser(procIds, name, project, maxToAdd=100, verbose=False, legacy=False):
     print("Note: this cell may take several minutes to run. This is expected behavior.")
     # Set up variables
     client = bigquery.Client()
@@ -395,9 +343,19 @@ def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False, legacy
     print("Preparing to add", len(toAdd), "reports for", name, "...")
     
     for r in toAdd:
+        # Get the metadata about the patient whose report we're adding
+        queryGetMetadata = "SELECT * from arcus.procedure_order where proc_ord_id = '"+str(r)+"'; "
+        metadataDf = client.query(queryGetMetadata).to_dataframe()
         # Add the report
-        queryInsertReport = "INSERT into lab.grader_table (proc_ord_id, grader_name, grade_category, grade)"
-        queryInsertReport += " VALUES (cast('"+str(r)+"' as int64), '"+name+"', 'Unique', 999);"
+        # queryInsertReport = "INSERT into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade_category, grade)"
+        
+        queryInsertReports = "INSERT into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) "
+        queryInsertReport += " VALUES ('"+str(r)+"', '"+name+"', 999, 'Unique',"
+        queryInsertReport += "'"+metadataDf['pat_id'].values[0]+"', "
+        queryInsertReport += str(metadataDf['proc_ord_age'].values[0])+", "
+        queryInsertReport += str(metadataDf['proc_ord_year'].values[0])+", "
+        queryInsertReport += "'"+metadataDf['proc_ord_desc'].values[0]+", "
+        queryInsertReport += "'arcus.procedure_order', '"+project+"');"
         addReportJob = client.query(queryInsertReport)
         addReportJob.result()
         
@@ -420,54 +378,74 @@ def addReportsFromListForUser(procIds, name, maxToAdd=100, verbose=False, legacy
             
 def addReliabilityReports(name):
     client = bigquery.Client()
+    
+    # Get the grader table
+    queryGetGraderTable = "SELECT * from lab.grader_table_with_metadata where grader_name = '"+name+"' and grade_category = 'Reliability';"
+    graderDf = client.query(queryGetGraderTable).to_dataframe()
+    
+    reliabilityDf = pd.read_csv("reliability_report_info.csv")
+    addReports = False
 
-    query = """
-    with cte as (
-      select
-        distinct(proc_ord_id) as proc_ord_id,
-        grader_name
-      from
-        lab.grader_table
-      where
-        grade_category = 'Reliability'
-        and grader_name = 'Megan M. Himes'
-    )
-    select
-      main.proc_ord_id
-    from
-      lab.grader_table main
-      inner join cte on main.proc_ord_id = cte.proc_ord_id
-    where
-      main.grader_name = "Alesandra Gorgone"
-    """
+    queryInsertReport = "INSERT into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES"
+    
+    # print(graderDf['proc_ord_id'].values)
 
-    reliabilityDf = client.query(query).to_dataframe()
-    reliabilityIds = list(reliabilityDf['proc_ord_id'].values)
+    for idx, row in reliabilityDf.iterrows():
+        # print(row['proc_ord_id'])
+        if str(row['proc_ord_id']) not in graderDf['proc_ord_id'].values:
+            # Add the report
+            queryInsertReport += " ('"+str(int(row['proc_ord_id']))+"', '"+name+"', 999, 'Reliability', '"
+            queryInsertReport += row['pat_id']+"', "+str(row['age_in_days'])+", "+str(row['proc_ord_year'])+", '"
+            queryInsertReport += row['proc_name']+"', '"+row['report_origin_table']+"', '"+row['project']+"'),"
+            addReports = True
 
-    queryInsertReport = "INSERT into lab.grader_table (proc_ord_id, grader_name, grade_category, grade) VALUES"
-
-    for r in sorted(reliabilityIds)[:-1]:
-        # Add the report
-        queryInsertReport += " (cast('"+str(r)+"' as int64), '"+name+"', 'Reliability', 999),"
-
-
-    queryInsertReport = queryInsertReport[:-1] + ";"
-    print(queryInsertReport)
-    addReportJob = client.query(queryInsertReport)
-    addReportJob.result()
+    if addReports:
+        print("Adding reliability reports to grade")
+        queryInsertReport = queryInsertReport[:-1] + ";"
+        # print(queryInsertReport)
+        addReportJob = client.query(queryInsertReport)
+        addReportJob.result()
+        
             
-            
+def checkReliabilityRatings(graderDf):
+        
+    if len(graderDf) == 0:
+        return False
+    
+    name = graderDf['grader_name'].values[0]
+    reliabilityDf = pd.read_csv("reliability_report_info.csv")
+    reliabilityIds = reliabilityDf['proc_ord_id'].values
+    graderReliabilityDf = graderDf[graderDf['grade_category'] == 'Reliability']
+    graderIds = graderReliabilityDf['proc_ord_id'].values
+    numReliability = len([i for i in reliabilityIds if str(i) in graderIds])
+    numGradedReliability = len(graderReliabilityDf[graderReliabilityDf['grade'] != 999]['proc_ord_id'].values)
+    
+    assert numReliability == len(reliabilityIds)
+    print(name, "has graded", numGradedReliability, "of", numReliability, "reliability reports")
+    
+    if numGradedReliability == numReliability:
+        return True
+    elif numGradedReliability < numReliability:
+        return False
+    else:
+        print("Error (code surplus): Grader has graded more reliability reports than exist")
+        
+
 def getGraderStatusReport(name):
     client = bigquery.Client()
     
-    query = "select * from lab.grader_table where "
+    query = "select * from lab.grader_table_with_metadata where "
     query += "grader_name = '"+ name +"';"
     
     df = client.query(query).to_dataframe()
     
+    # Case: user not in table
+    if len(df) == 0:
+        print("User is not in the table yet.")
+        return
+    
     # Reliability ratings
-    numReliability = df[df['grade_category'] == 'Reliability'].shape[0]
-    print(name, "has graded", numReliability, "of 150 reliability reports") # TODO: make this bit match the set reliability report ids
+    checkReliabilityRatings(df)
     
     # Unique
     uniqueReportsDf = df[df['grade_category'] == 'Unique']
