@@ -4,6 +4,9 @@ import random
 from annotationHelperLib import *
 from IPython.display import clear_output
 from google.cloud import bigquery # SQL table interface on Arcus
+from collections import Counter 
+
+numUsersForValidation = 2
  
     
 ##
@@ -211,32 +214,70 @@ def markOneReportSQL(name, project, toHighlight = {}):
 ##
 # Get more proc_ord_id for which no reports have been rated for the specified user to grade
 # @param name A str containing the full name of the grader (to also be referenced in publications)
-def getMoreReportsToGrade(name, project, legacy=False):
+def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt", numberToAdd=50):
+    # Global var declaration
+    global numUsersForValidation
+    print("It is expected for this function to take several minutes to run. Your patience is appreciated.")
+    
     # Initialize the client service
     client = bigquery.Client()
-        
-    # Set up the query to get more reports for the specified person to annotate 
-    addReportsQuery = "insert into lab.grader_table_with_metadata select distinct source.proc_ord_id, "
-    addReportsQuery += name +" as grader_name, 999 as grade, 'Unique' as grade_category, pat_id, "
-    addReportsQuery += "age_in_days, cast(proc_ord_year as int64) as proc_ord_year, "
     
-    if legacy:
-        addReportsQuery += "proc_name, 'arcus.reports_annotations_master' as report_origin_table, '"
-        addReportsQuery += project + "' as project "
-        addReportsQuery += "from arcus.reports_annotations_master source "
-        
-    else:
-        addReportsQuery += "proc_ord_desc as proc_name, 'arcus.procedure_order' as report_origin_table "
-        addReportsQuery += project + "' as project "
-        addReportsQuery += "from arcus.procedure_order source "
-        
-    addReportsQuery += "left outer join lab.grader_table filter on filter.proc_ord_id = source.proc_ord_id "
-    addReportsQuery += "where filter.proc_ord_id is null "
-    addReportsQuery += "order by source.proc_ord_year desc, source.proc_ord_age asc limit 10;"
+    # Open the specified query file
+    with open(queryFn, 'r') as f:
+        qProject = f.read()
+    # Run the query from the specified file
+    dfProject = client.query(qProject).to_dataframe()
+    # Now we have the ids of the reports we want to grade for Project project
+    projectProcIds = dfProject['proc_ord_id'].values 
+    
+    # Get the proc_ord_ids from the grader table
+    qGradeTable = "SELECT proc_ord_id, grader_name from lab.grader_table_with_metadata where grade_category='Unique'"
+    dfGradeTable = client.query(qGradeTable).to_dataframe()
+    gradeTableProcIds = dfGradeTable['proc_ord_id'].values
+    userProcIds = dfGradeTable[dfGradeTable['grader_name'] == name]['proc_ord_id'].values
+    
+    # Validation: are there any reports for the project that need to be validated that name hasn't graded?
+    projectReportsInTable = [procId for procId in projectProcIds if procId in gradeTableProcIds]
+    # Count the number of occurrences of each procId 
+    countedProcIdsInTable = Counter(projectReportsInTable)
+    # Identify project reports in the table fewer than V times
+    procIdsNeedValidation = [k for (k, v) in countedProcIdsInTable.items() if v < numUsersForValidation]
+    # Ignore procIds rated by User name
+    toAddValidation = [procId for procId in procIdsNeedValidation if procId not in userProcIds][:numberToAdd]
+    
+    # Add validation reports - procIds already in the table
+    if len(toAddValidation) > 0:
+        print(len(toAddValidation))
+        addReportsQuery = "insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES "
+        for procId in toAddValidation:
+            row = dfProject[dfProject['proc_ord_id'] == procId]
+            addReportsQuery += "('"+str(procId)+"', '"+name+"', 999, 'Unique', '"
+            addReportsQuery += row['pat_id'].values[0]+"', "+str(row['proc_ord_age'].values[0])
+            addReportsQuery += ", "+str(row['proc_ord_year'].values[0])+", '"+str(row['proc_ord_desc'].values[0])
+            addReportsQuery += "', 'arcus.procedure_order', '"+project+"'), "
+        addReportsQuery = addReportsQuery[:-2]+";"
+        print(addReportsQuery)
+        addingReports = client.query(addReportsQuery)
+        addingReports.result()
 
-    # Submit the query
-    supplementRaterReports = client.query(addReportsQuery)
-    supplementRaterReports.result()
+    
+    # New reports
+    toAddNew = [procId for procId in projectProcIds if procId not in projectReportsInTable][:(numberToAdd - len(toAddValidation))]
+    
+    # Add new reports
+    if len(toAddNew) > 0:
+        print(len(toAddNew))
+        addReportsQuery = "insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES "
+        for procId in toAddNew:
+            row = dfProject[dfProject['proc_ord_id'] == procId]
+            addReportsQuery += "('"+str(procId)+"', '"+name+"', 999, 'Unique', '"
+            addReportsQuery += row['pat_id'].values[0]+"', "+str(row['proc_ord_age'].values[0])
+            addReportsQuery += ", "+str(row['proc_ord_year'].values[0])+", '"+str(row['proc_ord_desc'].values[0])
+            addReportsQuery += "', 'arcus.procedure_order', '"+project+"'), "
+        addReportsQuery = addReportsQuery[:-2]+";"
+        print(addReportsQuery)
+        addingReports = client.query(addReportsQuery)
+        addingReports.result()
     
     # Check: how many reports were added for the user?
     getUserUnratedCount = 'SELECT * FROM lab.grader_table_with_metadata WHERE grader_name like "' + name + '" and grade = 999'
@@ -289,90 +330,6 @@ def welcomeUser(name):
                 
     return True
 
-
-##
-# Add reports to grade for a user from a list of ids
-# @param procIds A list of proc_ord_ids specified by the user
-# @param name A string containing the identifier for the user
-# @param maxToAdd An int specifying the maximum number of reports to add (default 100)
-# @param verbose A boolean flag indicating how much output to print to stdout (default False)
-def addReportsFromListForUser(procIds, name, project, maxToAdd=100, verbose=False, legacy=False):
-    print("Note: this cell may take several minutes to run. This is expected behavior.")
-    # Set up variables
-    client = bigquery.Client()
-    reportsInTableStatus = {}
-    invalidIds = []
-    addedReports = 0
-    inTableReports = 0
-    reliabilityReports = 0
-    if legacy:
-        source = "arcus.reports_annotations_master"
-    else:
-        source = "arcus.procedure_order"
-        
-    # Check report ids for validity 
-    print("Checking the list of ids to make sure each is valid...")
-    q = "SELECT * from "+source+" ;"
-    procDf = client.query(q).to_dataframe()
-    if verbose: print("Proc ord table:",procDf.shape)
-    validIds = [i for i in procIds if str(i) in procDf['proc_ord_id'].values]
-    if verbose: print("Number of valid ids:",len(validIds))
-    print("Validity check completed.")
-        
-    # Get the list of report ids in the table
-    print("Checking to see how many requested reports have been graded or are in the grading queue...")
-    q = "SELECT * from lab.grader_table;"
-    graderDf = client.query(q).to_dataframe()
-    if verbose: print("Graded report table shape:",graderDf.shape)
-    
-    # Get the difference between the two lists
-    graderReports = graderDf['proc_ord_id'].values
-    existingReports = [i for i in validIds if i in graderReports]
-    unqueuedReports = [i for i in validIds if i not in graderReports]
-    if verbose: print("Graded reports:", len(existingReports))
-    if verbose: print("Ungraded reports:", len(unqueuedReports))
-    
-    # Pull up to N reports not yet in the table
-    if len(unqueuedReports) >= maxToAdd: 
-        # More reports in to-add list than the max
-        toAdd = unqueuedReports[:maxToAdd]
-    else:
-        # Fewer reports in to-add list than the max
-        toAdd = unqueuedReports
-        
-    print("Preparing to add", len(toAdd), "reports for", name, "...")
-    
-    for r in toAdd:
-        # Get the metadata about the patient whose report we're adding
-        queryGetMetadata = "SELECT * from arcus.procedure_order where proc_ord_id = '"+str(r)+"'; "
-        metadataDf = client.query(queryGetMetadata).to_dataframe()
-        # Add the report
-        # queryInsertReport = "INSERT into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade_category, grade)"
-        
-        queryInsertReports = "INSERT into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) "
-        queryInsertReport += " VALUES ('"+str(r)+"', '"+name+"', 999, 'Unique',"
-        queryInsertReport += "'"+metadataDf['pat_id'].values[0]+"', "
-        queryInsertReport += str(metadataDf['proc_ord_age'].values[0])+", "
-        queryInsertReport += str(metadataDf['proc_ord_year'].values[0])+", "
-        queryInsertReport += "'"+metadataDf['proc_ord_desc'].values[0]+", "
-        queryInsertReport += "'arcus.procedure_order', '"+project+"');"
-        addReportJob = client.query(queryInsertReport)
-        addReportJob.result()
-        
-    print(len(toAdd), "were added for", name)
-
-    # For the reports already in the table: get their statuses
-    if len(existingReports) > 0:
-        print(len(existingReports), "reports are already in the table:")
-        gradedReports = graderDf[graderDf['proc_ord_id'].isin(existingReports)]
-        if verbose: print(gradedReports.shape)
-        # grade values
-        for g in range(3):
-            print(gradedReports[gradedReports['grade'] == g].shape[0], "were graded", g)
-        # graders
-        for name in list(set(gradedReports['grader_name'].values)):
-            numToGrade = gradedReports[(gradedReports['grade'] == 999) & (gradedReports['grader_name'] == name)].shape[0]
-            if numToGrade > 0: print(numToGrade, "are already assigned to", name)
             
 
             
@@ -464,5 +421,5 @@ if __name__ == "__main__":
     print("Tested and used by:")
     print("- Caleb Schmitt, Summer 2021")
     print("- Nadia Ngom, Fall 2021 - Spring 2022")
-
+    print("- Alesandra Gorgone, Spring 2023")
 
