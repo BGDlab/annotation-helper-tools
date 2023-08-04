@@ -338,7 +338,7 @@ def addReliabilityReports(name):
     queryGetGraderTable = "SELECT * from lab.grader_table_with_metadata where grader_name = '"+name+"' and grade_category = 'Reliability';"
     graderDf = client.query(queryGetGraderTable).to_dataframe()
     
-    reliabilityDf = pd.read_csv("reliability_report_info.csv")
+    reliabilityDf = pd.read_csv("~/arcus/shared/reliability_report_info.csv")
     addReports = False
 
     queryInsertReport = "INSERT into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES"
