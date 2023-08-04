@@ -149,24 +149,24 @@ def markOneReportSQL(name, project, toHighlight = {}):
         return
     
     # Get the report for that proc_ord_id from the primary report table
-    getReportRow = 'SELECT * FROM arcus.procedure_order where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+    getReportRow = 'SELECT * FROM arcus.procedure_order where proc_ord_id = "'+str(df['proc_ord_id'].values[0])+'"'
     reportDf = client.query(getReportRow).to_dataframe()
     
     # If the id was in the new table:
     if len(reportDf) == 1:
         originTable = "arcus.procedure_order"
         
-        getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+        getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id = "'+str(df['proc_ord_id'].values[0])+'"'
         reportText = client.query(getReportRow).to_dataframe()['narrative_text'].values[0]
         
-        getReportRow = 'SELECT * FROM arcus.procedure_order_impression where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+        getReportRow = 'SELECT * FROM arcus.procedure_order_impression where proc_ord_id = "'+str(df['proc_ord_id'].values[0])+'"'
         reportDf = client.query(getReportRow).to_dataframe()
         
         if len(reportDf) == 1:
             reportText += "\n\nIMPRESSION: " + reportDf['impression_text'].values[0]
             
     elif len(reportDf) == 0:
-        getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+        getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id = "'+str(df['proc_ord_id'].values[0])+'"'
         reportDf = client.query(getReportRow).to_dataframe()
         
         if len(reportDf) > 0: 
@@ -176,7 +176,6 @@ def markOneReportSQL(name, project, toHighlight = {}):
             if reportDf['impression_text'].values[0] != 'nan':
                 reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]        
         
-    
     # If the user passed a dictionary of lists to highlight
     if len(toHighlight.keys()) > 0:
         for key in toHighlight.keys():
@@ -231,51 +230,52 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
     projectProcIds = dfProject['proc_ord_id'].values 
     
     # Get the proc_ord_ids from the grader table
-    qGradeTable = "SELECT proc_ord_id, grader_name from lab.grader_table_with_metadata where grade_category='Unique'"
+    qGradeTable = "SELECT proc_ord_id, grader_name from lab.grader_table_with_metadata where grade_category='Unique'; "
     dfGradeTable = client.query(qGradeTable).to_dataframe()
     gradeTableProcIds = dfGradeTable['proc_ord_id'].values
     userProcIds = dfGradeTable[dfGradeTable['grader_name'] == name]['proc_ord_id'].values
     
     # Validation: are there any reports for the project that need to be validated that name hasn't graded?
-    projectReportsInTable = [procId for procId in projectProcIds if procId in gradeTableProcIds]
-    # Count the number of occurrences of each procId 
-    countedProcIdsInTable = Counter(projectReportsInTable)
-    # Identify project reports in the table fewer than V times
-    procIdsNeedValidation = [k for (k, v) in countedProcIdsInTable.items() if v < numUsersForValidation]
+    toAddValidation = []
+    for procId in projectProcIds: # for each proc_id in the project
+        if procId in dfGradeTable['proc_ord_id'].values: # if the proc_id report was already graded
+            graders = dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "grader_name"].values
+            gradersStr = ", ".join(graders)
+            # if the report was not graded by Coarse Text Search or the user and has not been graded N times
+            if "Coarse Text Search" not in gradersStr and name not in gradersStr and len(graders) < numUsersForValidation:
+                toAddValidation.append(procId)   
+            
+    # projectReportsInTable = [procId for procId in projectProcIds if procId in dfGradeTable['proc_ord_id'].values and not dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "grader_name"].str.contains("Coarse Text Search").any() ]
     # Ignore procIds rated by User name
-    toAddValidation = [procId for procId in procIdsNeedValidation if procId not in userProcIds][:numberToAdd]
+    # toAddValidation = [procId for procId in procIdsNeedValidation if procId not in userProcIds][:numberToAdd]
     
     # Add validation reports - procIds already in the table
     if len(toAddValidation) > 0:
-        print(len(toAddValidation))
-        addReportsQuery = "insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES "
+        addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES '
         for procId in toAddValidation:
             row = dfProject[dfProject['proc_ord_id'] == procId]
-            addReportsQuery += "('"+str(procId)+"', '"+name+"', 999, 'Unique', '"
-            addReportsQuery += row['pat_id'].values[0]+"', "+str(row['proc_ord_age'].values[0])
-            addReportsQuery += ", "+str(row['proc_ord_year'].values[0])+", '"+str(row['proc_ord_desc'].values[0])
-            addReportsQuery += "', 'arcus.procedure_order', '"+project+"'), "
+            addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
+            addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
+            addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
+            addReportsQuery += '", "arcus.procedure_order", "'+project+'"), '
         addReportsQuery = addReportsQuery[:-2]+";"
-        print(addReportsQuery)
         addingReports = client.query(addReportsQuery)
         addingReports.result()
 
     
     # New reports
-    toAddNew = [procId for procId in projectProcIds if procId not in projectReportsInTable][:(numberToAdd - len(toAddValidation))]
+    toAddNew = [procId for procId in projectProcIds if procId not in dfGradeTable['proc_ord_id'].values][:(numberToAdd - len(toAddValidation))]
     
     # Add new reports
     if len(toAddNew) > 0:
-        print(len(toAddNew))
-        addReportsQuery = "insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES "
+        addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES '
         for procId in toAddNew:
             row = dfProject[dfProject['proc_ord_id'] == procId]
-            addReportsQuery += "('"+str(procId)+"', '"+name+"', 999, 'Unique', '"
-            addReportsQuery += row['pat_id'].values[0]+"', "+str(row['proc_ord_age'].values[0])
-            addReportsQuery += ", "+str(row['proc_ord_year'].values[0])+", '"+str(row['proc_ord_desc'].values[0])
-            addReportsQuery += "', 'arcus.procedure_order', '"+project+"'), "
+            addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
+            addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
+            addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
+            addReportsQuery += '", "arcus.procedure_order", "'+project+'"), '
         addReportsQuery = addReportsQuery[:-2]+";"
-        print(addReportsQuery)
         addingReports = client.query(addReportsQuery)
         addingReports.result()
     
@@ -329,8 +329,6 @@ def welcomeUser(name):
               print("You currently have", len(raterUnratedDf), "ungraded reports to work on.")
                 
     return True
-
-            
 
             
 def addReliabilityReports(name):
