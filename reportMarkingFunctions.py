@@ -375,6 +375,8 @@ def checkReliabilityRatings(graderDf):
     numReliability = len([i for i in reliabilityIds if str(i) in graderIds])
     numGradedReliability = len(graderReliabilityDf[graderReliabilityDf['grade'] != 999]['proc_ord_id'].values)
     
+    print(numReliability)
+    print(len(reliabilityIds))
     assert numReliability == len(reliabilityIds)
     print(name, "has graded", numGradedReliability, "of", numReliability, "reliability reports")
     
