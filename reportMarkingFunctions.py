@@ -368,7 +368,7 @@ def checkReliabilityRatings(graderDf):
         return False
     
     name = graderDf['grader_name'].values[0]
-    reliabilityDf = pd.read_csv("reliability_report_info.csv")
+    reliabilityDf = pd.read_csv("~/arcus/shared/reliability_report_info.csv")
     reliabilityIds = reliabilityDf['proc_ord_id'].values
     graderReliabilityDf = graderDf[graderDf['grade_category'] == 'Reliability']
     graderIds = graderReliabilityDf['proc_ord_id'].values
