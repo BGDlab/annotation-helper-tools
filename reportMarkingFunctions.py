@@ -299,11 +299,11 @@ def welcomeUser(name):
     
     if len(selfEvalDf) == 0:
         print("It appears you have yet to do the self-evaluation. Please grade those reports before continuing.")
-        # break
+        break
         
     elif 999 in selfEvalDf['grade'].values:
         print("It appears you have started the self-evaluation but have not finished it. Please grade those reports before continuing.")
-        # break
+        break
     
     qReliability = 'select * from lab.grader_table_with_metadata where grade_category = "Reliability" and grader_name like"'+name+'"'
     reliabilityDf = client.query(qReliability).to_dataframe()
