@@ -252,7 +252,7 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
     # Add validation reports - procIds already in the table
     if len(toAddValidation) > 0:
         addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES '
-        for procId in toAddValidation:
+        for procId in toAddValidation[:numberToAdd]:
             row = dfProject[dfProject['proc_ord_id'] == procId]
             addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
             addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
