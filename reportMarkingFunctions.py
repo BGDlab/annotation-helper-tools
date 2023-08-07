@@ -373,7 +373,8 @@ def checkReliabilityRatings(graderDf):
     graderReliabilityDf = graderDf[graderDf['grade_category'] == 'Reliability']
     graderIds = graderReliabilityDf['proc_ord_id'].values
     numReliability = len([i for i in reliabilityIds if str(i) in graderIds])
-    numGradedReliability = len(graderReliabilityDf[graderReliabilityDf['grade'] != 999]['proc_ord_id'].values)
+    # numGradedReliability = len(graderReliabilityDf[graderReliabilityDf['grade'] != 999]['proc_ord_id'].values)
+    numGradedReliability = len([i for i in reliabilityIds if str(i) in graderIds and max(graderReliabilityDf[graderReliabilityDf['proc_ord_id'] == str(i)]['grade'].values) != 999]) 
     
     print(numReliability)
     print(len(reliabilityIds))
