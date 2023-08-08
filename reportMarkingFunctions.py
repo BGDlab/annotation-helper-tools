@@ -47,6 +47,26 @@ def readSampleReports(toHighlight = {}):
         
     print('You have finished reading the example reports. Rerun this cell to read them again or proceed to the next section.')
     
+
+##
+# Add reports for the user to grade for the self-eval
+# @param name A str containing the full name of the grader (to also be referenced in publications)
+def addSelfEvalReports(name):
+    client = bigquery.Client()
+    
+    queryGetSelfEval = "select distinct report_id from lab.training_selfeval;"
+    selfEvalDf = client.query(queryGetSelfEval).to_dataframe()
+    reportIds = selfEvalDf['report_id'].values
+    
+    queryInsertReport = "INSERT into lab.training_selfeval (report_id, grade, grader_name, reason) VALUES"
+    
+    for report in reportIds:
+        queryInsertReport += " ('"+str(report)+"', 999, '"+name+"', ' '),"
+    
+    queryInsertReport = queryInsertReport[:-1] + ";"
+    print("Adding "+str(len(reportIds))+" self-evaluation reports for "+name+" to grade.")
+    addReportJob = client.query(queryInsertReport)
+    addReportJob.result()
     
 ##
 # Pull the report associated with a proc_ord_id for which the specified grader has a grade of 999, and then grade the report. Modifies lab.grader_table
@@ -299,6 +319,7 @@ def welcomeUser(name):
     
     if len(selfEvalDf) == 0:
         print("It appears you have yet to do the self-evaluation. Please grade those reports before continuing.")
+        addSelfEvalReports(name)
         return
         
     elif 999 in selfEvalDf['grade'].values:
