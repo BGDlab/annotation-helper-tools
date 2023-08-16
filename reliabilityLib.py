@@ -6,12 +6,20 @@ from sklearn.metrics import cohen_kappa_score
 from IPython.display import clear_output
 from google.cloud import bigquery # SQL table interface on Arcus
 
+##
+# Get the proc_ord_id values for the reliability reports
+# @return reliabilityReportProcIds A list of the 151 proc_ord_ids for the reliability reports
+def getReliabilityProcOrdIds():
+    tmp = pd.read_csv("~/arcus/shared/reliability_report_info.csv")
+    procedureIds = tmp['proc_ord_id']
+    return procedureIds    
+
 
 def getReliabilityRatingsDf():
     # Initialize the client service
     client = bigquery.Client()
 
-    reliabilityRatingsQuery = "select * from lab.grader_table where grade_category = 'Reliability';"
+    reliabilityRatingsQuery = "select * from lab.grader_table_with_metadata where grade_category = 'Reliability';"
     reliabilityDf = client.query(reliabilityRatingsQuery).to_dataframe()
     reliabilityDf[['grade', 'proc_ord_id']] = reliabilityDf[['grade', 'proc_ord_id']].astype("int64")
     print(reliabilityDf.shape)
@@ -34,7 +42,7 @@ def getReliabilityRatingsDf():
         distinct(proc_ord_id) as proc_ord_id,
         grader_name
       from
-        lab.grader_table
+        lab.grader_table_with_metadata
       where
         grade_category = 'Reliability'
         and grader_name = 'Megan M. Himes'
@@ -42,7 +50,7 @@ def getReliabilityRatingsDf():
     select
       main.proc_ord_id
     from
-      lab.grader_table main
+      lab.grader_table_with_metadata main
       inner join cte on main.proc_ord_id = cte.proc_ord_id
     where
       main.grader_name = "Alesandra Gorgone"
@@ -79,35 +87,6 @@ def identifyDisagreementReports(grades1, grades2):
                 
     return disagreementProcIds
 
-
-##
-# Get the proc_ord_id values for the reliability reports
-# @return reliabilityReportProcIds A list of the 151 proc_ord_ids for the reliability reports
-def getReliabilityProcOrdIds():
-    client = bigquery.Client()
-    query = """
-        with cte as (
-          select
-            distinct(proc_ord_id) as proc_ord_id,
-            grader_name
-          from
-            lab.grader_table
-          where
-            grade_category = 'Reliability'
-            and grader_name = 'Megan M. Himes'
-        )
-        select
-          main.proc_ord_id
-        from
-          lab.grader_table_with_metadata main
-          inner join cte on main.proc_ord_id = cast(cte.proc_ord_id as string)
-        where
-          main.grader_name = "Alesandra Gorgone"
-        """
-
-    reliabilityReportProcIds = list(set(client.query(query).to_dataframe()['proc_ord_id']))
-    return reliabilityReportProcIds
-
 ##
 # For a pair of users with their grades in separate dataframes, compare them and calculate kappa
 # @param userName1 A string with the user's name (taken from the db table)
@@ -139,19 +118,48 @@ def compareUserPairGrades(userName1, userGrades1, userName2, userGrades2):
     kappa = cohen_kappa_score(list(userGrades1["grade"].values), list(userGrades2["grade"].values))
     print("With a Cohen's kappa of", kappa)
     return kappa
+
+
+def calculateKappa2vAll(userGrades1, userGrades2):
+    grades1 = userGrades1['grade'].values.astype(int)
+    grades2 = userGrades2['grade'].values.astype(int)
+    
+    condenser = lambda x : 2 if x == 2 else 0
+    
+    grades1 = [condenser(i) for i in grades1]
+    grades2 = [condenser(i) for i in grades2]
+    
+    kappa = cohen_kappa_score(grades1, grades2)
+    
+    print(" 2 vs. 0+1 kappa:", kappa)
+    return kappa
+    
+def calculateKappa0vAll(userGrades1, userGrades2):
+    grades1 = userGrades1['grade'].values.astype(int)
+    grades2 = userGrades2['grade'].values.astype(int)
+    
+    condenser = lambda x : 0 if x == 0 else 2
+    
+    grades1 = [condenser(i) for i in grades1]
+    grades2 = [condenser(i) for i in grades2]
+    
+    kappa = cohen_kappa_score(grades1, grades2)
+    
+    print(" 0 vs. 1+2 kappa:", kappa)
+    return kappa
     
     
 def getReportsForUser(user, procIds):
     client = bigquery.Client()
     
-    getUserReports = "select cast(proc_ord_id as int64) as proc_ord_id, grade from lab.grader_table "
+    getUserReports = "select cast(proc_ord_id as int64) as proc_ord_id, grade from lab.grader_table_with_metadata "
     getUserReports += "where grader_name = '"+user
     getUserReports += "' and grade_category = 'Reliability';"
     
     userReliabilityReports = client.query(getUserReports).to_dataframe()
     print(user)
     print(userReliabilityReports.shape)
-    userReliabilityReports = userReliabilityReports[userReliabilityReports['proc_ord_id'].astype(str).isin(procIds)]
+    userReliabilityReports = userReliabilityReports[userReliabilityReports['proc_ord_id'].astype(int).isin(procIds)]
     print(userReliabilityReports.shape)
     
     return userReliabilityReports
