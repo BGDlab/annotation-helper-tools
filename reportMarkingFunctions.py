@@ -409,6 +409,78 @@ def checkReliabilityRatings(graderDf):
     else:
         print("Error (code surplus): Grader has graded more reliability reports than exist")
         
+        
+        
+##
+# For a specified list of reports, change their grades to 999 to put them back
+# in a user's queue. ASSUMES THE USER HAS VERIFIED THE REPORTS TO RELEASE
+# @param graderName A string specifying the grader
+# @param reportsList A list of proc_ord_id elements to reset the grades for
+def releaseReports(graderName, reportsList):
+    # Initialize the client
+    client = bigquery.Client()
+
+    # For each report
+    for procId in reportsList:
+        # Update the grader table with the new grade
+        updateQuery = 'UPDATE lab.grader_table_with_metadata set grade = 999'
+        updateQuery += ' WHERE proc_ord_id = "'+str(procId)+'"'
+        updateQuery += ' and grader_name = "' + graderName + '"'
+
+        updateJob = client.query(updateQuery)
+        updateJob.result()
+        
+    print(len(reportsList), "were released back into the queue for", graderName)
+    
+    
+# LOH How do I test this?
+# Create a user Bob Belcher
+# Add the reliability reports
+# Grade some of his reliability reports
+# Back up his grades
+# Check
+# Grade more
+# Back up his grades again
+# Check
+def backupReliabilityGrades(user):
+    client = bigquery.Client()
+    
+    q = "select * from lab.grader_table_with_metadata where grader_name = '"+user
+    q += "' and grade_category = 'Reliability'"
+    primaryDf = client.query(q).to_dataframe()
+    
+    for procId in primaryDf['proc_ord_id'].values:
+        # If the proc id is not in the df for the user
+        q = "select * from lab.reliability_grades_original where grader_name = '"+user
+        q += "' and grade_category = 'Reliability' and proc_ord_id = " + str(procId) + ";"
+        backupDf = client.query(q).to_dataframe()
+        
+        # if the query returned an empty dataframe
+        if len(backupDf) == 0:
+            # Then add the row to the table
+            addQ = "insert into lab.reliability_grades_original (proc_ord_id, grader_name, "
+            addQ += "grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, "
+            addQ += "report_origin_table, project) values ('"+str(procId)+"', '"+primaryDf['grader_name'].values[0]
+            addQ += "', "+str(primaryDf['grade'].values[0])+", 'Reliability', '"+str(primaryDf['pat_id'].values[0])
+            addQ += "', "+str(primaryDf['age_in_days'].values[0])+", "+str(primaryDf['proc_ord_year'].values[0])
+            addQ += ", '"+str(primaryDf['proc_name'].values[0])+"', '"+str(primaryDf['report_origin_table'].values[0])
+            addQ += "', '"+str(primaryDf['project'].values[0])+"') ;"
+            
+            # addJob = client.query(addQ)
+            # addJob.result()
+            
+            
+        elif len(backupDf) == 1:
+            if backupDf['grade'].values == 999:
+                updateQ = 'UPDATE lab.reliability_grades_original set grade = '+primaryDf['grade'].values[0]
+                updateQ += ' WHERE proc_ord_id = "'+str(primaryDf['proc_ord_id'].values[0])+'"'
+                updateQ += ' and grader_name = "' + str(primaryDf['grader_name'].values[0])+'"'
+                
+                updateJob = client.query(updateQ)
+                updateJob.result()
+                
+    
+    
 
 def getGraderStatusReport(name):
     client = bigquery.Client()

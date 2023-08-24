@@ -63,60 +63,51 @@ def getReliabilityRatingsDf():
 
     return ratingsDf
 
-def identifyDisagreementReports(grades1, grades2):
+##
+# Identifies reports with different grades for 2 graders
+# @param grades1Df A dataframe object with columns proc_ord_id and grade for user 1
+# @param grades2Df A dataframe object with columns proc_ord_id and grade for user 2
+# @return disagreementProcIds A list of proc_ord_id strings specifying reports with 2 different grades
+def identifyDisagreementReports(grades1Df, grades2Df):
     # Double check that the incoming dataframes are sorted the same way
-    grades1 = grades1.sort_values("proc_ord_id", ignore_index=True)
-    grades2 = grades2.sort_values("proc_ord_id", ignore_index=True) 
+    grades1Df = grades1Df.sort_values("proc_ord_id", ignore_index=True)
+    grades2Df = grades2Df.sort_values("proc_ord_id", ignore_index=True) 
     
     # Triple check the order
-    assert list(grades1['proc_ord_id'].values) == list(grades2['proc_ord_id'].values)
+    assert list(grades1Df['proc_ord_id'].values) == list(grades2Df['proc_ord_id'].values)
     
     shared = 0
     disagreementProcIds = [] 
     
-    for idx, row in grades1.iterrows():
+    for idx, row in grades1Df.iterrows():
         procId = row['proc_ord_id']
-        grades = [grades1.iloc[idx]['grade'],
-                  grades2.iloc[idx]['grade']]
+        grades = [grades1Df.iloc[idx]['grade'],
+                  grades2Df.iloc[idx]['grade']]
         if 999.0 in grades:
             continue
         else:
             shared += 1
-            if (max(grades) - min(grades)) == 2:
+            if grades[0] != grades[1]:
                 disagreementProcIds.append(procId)
                 
     return disagreementProcIds
 
 ##
 # For a pair of users with their grades in separate dataframes, compare them and calculate kappa
-# @param userName1 A string with the user's name (taken from the db table)
 # @param userGrades1 A dataframe with the proc_ord_id and corresponding grades for that graders reliability reports
-# @param userName2 A string with the user's name (taken from the db table)
 # @param userGrades2 A dataframe with the proc_ord_id and corresponding grades for that graders reliability reports
 # @return kappa A float variable, Cohen's kappa
-def compareUserPairGrades(userName1, userGrades1, userName2, userGrades2):
+def calculateKappa(userGrades1, userGrades2):
     # Double check that the incoming dataframes are sorted the same way
     userGrades1 = userGrades1.sort_values("proc_ord_id")
     userGrades2 = userGrades2.sort_values("proc_ord_id") 
     
     # Triple check the order
     assert list(userGrades1['proc_ord_id'].values) == list(userGrades2['proc_ord_id'].values)
-
-    for grade in range(3):
-        # Get the df of reports from the userReliabilityGrades table that are in the list
-        user1GradeProcs = userGrades1[userGrades1['grade'] == grade]['proc_ord_id']
-        print("Of the", len(user1GradeProcs), "reports", userName1, "gave a", grade, ",", userName2, "gave")
-        # for each grade level
-        for baseGrade in range(3):
-            # Get the number of reports whose grades
-            user2ProcGrades = userGrades2[userGrades2['proc_ord_id'].isin(user1GradeProcs)]
-            count = user2ProcGrades[user2ProcGrades['grade'] == baseGrade].shape[0]
-            print(count, "a grade of", baseGrade)
-    print(" ")
             
     # Calculate Cohen's kappa
     kappa = cohen_kappa_score(list(userGrades1["grade"].values), list(userGrades2["grade"].values))
-    print("With a Cohen's kappa of", kappa)
+    print("Cohen's kappa:", kappa)
     return kappa
 
 
@@ -157,10 +148,7 @@ def getReportsForUser(user, procIds):
     getUserReports += "' and grade_category = 'Reliability';"
     
     userReliabilityReports = client.query(getUserReports).to_dataframe()
-    print(user)
-    print(userReliabilityReports.shape)
     userReliabilityReports = userReliabilityReports[userReliabilityReports['proc_ord_id'].astype(int).isin(procIds)]
-    print(userReliabilityReports.shape)
     
     return userReliabilityReports
 
@@ -201,4 +189,36 @@ def printDisagreementReports(disagreementIds, grades1, grades2):
         
         confirmContinue = str(input('Press enter to continue'))
         clear_output()
-    
+        
+        
+def calculateMetricForGraders(graders, metric):
+    procIds = getReliabilityProcOrdIds()
+    metricTable = pd.DataFrame(0, 
+                               columns=graders[1:], 
+                               index=graders[:-1])
+
+    for idx1 in range(len(graders)-1):
+        grades1 = getReportsForUser(graders[idx1], procIds)
+        grades1 = grades1.sort_values("proc_ord_id", ignore_index=True)
+
+        for idx2 in range(idx1+1, len(graders)):
+            # Get the grades for the graders
+            grades2 = getReportsForUser(graders[idx2], procIds)
+            grades2 = grades2.sort_values("proc_ord_id", ignore_index=True)
+
+            if metric == "disagreement":
+                tmp = identifyDisagreementReports(grades1, grades2)
+                metricTable.loc[graders[idx1], graders[idx2]] = len(tmp)
+
+            elif metric == "kappa":
+                k = calculateKappa(grades1, grades2)
+                metricTable.loc[graders[idx1], graders[idx2]] = k
+
+            elif metric == "kappa2vAll":
+                k = calculateKappa2vAll(grades1, grades2)
+                metricTable.loc[graders[idx1], graders[idx2]] = k
+            elif metric == "kappa0vAll":
+                k = calculateKappa0vAll(grades1, grades2)
+                metricTable.loc[graders[idx1], graders[idx2]] = k
+
+    return metricTable
