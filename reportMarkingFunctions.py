@@ -201,24 +201,31 @@ def markOneReportSQL(name, project, toHighlight = {}):
         for key in toHighlight.keys():
             reportText = markTextColor(reportText, toHighlight[key], key)
             
+    # Print the proc_ord_id
+    print("Report id:", str(df['proc_ord_id'].values[0]))
+    print()
     # Print the report and ask for a grade
     print(reportText)
     print()
-    grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
-    while grade != "0" and grade != "1" and grade != "2":
-        grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use): '))
+    grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
+    while grade != "0" and grade != "1" and grade != "2" and grade != "-1":
+        grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
     print()
     
     # Ask the user to confirm the grade
     confirmGrade = "999"
     while confirmGrade != grade :
-        while confirmGrade != "0" and confirmGrade != "1" and confirmGrade != "2":
+        while confirmGrade != "0" and confirmGrade != "1" and confirmGrade != "2" and confirmGrade != "-1":
             confirmGrade = str(input("Please confirm your grade by reentering it OR enter a revised value to change the grade: "))
         if confirmGrade != grade:
             grade = confirmGrade
             confirmGrade = "999"
-            
-    print("Saving your grade of", grade, "for this report.")
+    
+    if confirmGrade == "-1":
+        print("This report is being marked as SKIPPED (-1) for you.")
+        
+    else:
+        print("Saving your grade of", grade, "for this report.")
     
     # LOH - do more changes need to be made here to change the metadata in the table? I think no but ...
     # Update the grader table with the new grade
