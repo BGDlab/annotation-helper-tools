@@ -168,65 +168,9 @@ def markOneReportSQL(name, project, toHighlight = {}):
         print("There are currently no reports to grade for", name, " in the table. Please add more to continue.")
         return
     
-    # Get the report for that proc_ord_id from the primary report table
-    getReportRow = 'SELECT * FROM arcus.procedure_order where proc_ord_id = "'+str(df['proc_ord_id'].values[0])+'"'
-    reportDf = client.query(getReportRow).to_dataframe()
-    
-    # If the id was in the new table:
-    if len(reportDf) == 1:
-        originTable = "arcus.procedure_order"
+    printReport(df['proc_ord_id'].values[0], client, toHighlight)
+    grade = getGrade()
         
-        getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id = "'+str(df['proc_ord_id'].values[0])+'"'
-        reportText = client.query(getReportRow).to_dataframe()['narrative_text'].values[0]
-        
-        getReportRow = 'SELECT * FROM arcus.procedure_order_impression where proc_ord_id = "'+str(df['proc_ord_id'].values[0])+'"'
-        reportDf = client.query(getReportRow).to_dataframe()
-        
-        if len(reportDf) == 1:
-            reportText += "\n\nIMPRESSION: " + reportDf['impression_text'].values[0]
-            
-    elif len(reportDf) == 0:
-        getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id = "'+str(df['proc_ord_id'].values[0])+'"'
-        reportDf = client.query(getReportRow).to_dataframe()
-        
-        if len(reportDf) > 0: 
-            originTable = "arcus.reports_annotations_master"
-            # Combine the narrative and impression text
-            reportText = reportDf['narrative_text'].values[0] 
-            if reportDf['impression_text'].values[0] != 'nan':
-                reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]        
-        
-    # If the user passed a dictionary of lists to highlight
-    if len(toHighlight.keys()) > 0:
-        for key in toHighlight.keys():
-            reportText = markTextColor(reportText, toHighlight[key], key)
-            
-    # Print the proc_ord_id
-    print("Report id:", str(df['proc_ord_id'].values[0]))
-    print()
-    # Print the report and ask for a grade
-    print(reportText)
-    print()
-    grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
-    while grade != "0" and grade != "1" and grade != "2" and grade != "-1":
-        grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
-    print()
-    
-    # Ask the user to confirm the grade
-    confirmGrade = "999"
-    while confirmGrade != grade :
-        while confirmGrade != "0" and confirmGrade != "1" and confirmGrade != "2" and confirmGrade != "-1":
-            confirmGrade = str(input("Please confirm your grade by reentering it OR enter a revised value to change the grade: "))
-        if confirmGrade != grade:
-            grade = confirmGrade
-            confirmGrade = "999"
-    
-    if confirmGrade == "-1":
-        print("This report is being marked as SKIPPED (-1) for you.")
-        
-    else:
-        print("Saving your grade of", grade, "for this report.")
-    
     # LOH - do more changes need to be made here to change the metadata in the table? I think no but ...
     # Update the grader table with the new grade
     updateQuery = 'UPDATE lab.grader_table_with_metadata set grade = '+str(grade)
@@ -255,6 +199,7 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
     dfProject = client.query(qProject).to_dataframe()
     # Now we have the ids of the reports we want to grade for Project project
     projectProcIds = dfProject['proc_ord_id'].values 
+    print("Number of ids for project", project, len(projectProcIds))
     
     # Get the proc_ord_ids from the grader table
     qGradeTable = "SELECT proc_ord_id, grader_name from lab.grader_table_with_metadata where grade_category='Unique'; "
@@ -275,7 +220,7 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
     # projectReportsInTable = [procId for procId in projectProcIds if procId in dfGradeTable['proc_ord_id'].values and not dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "grader_name"].str.contains("Coarse Text Search").any() ]
     # Ignore procIds rated by User name
     # toAddValidation = [procId for procId in procIdsNeedValidation if procId not in userProcIds][:numberToAdd]
-    
+    print("Number of reports that need validating:", len(toAddValidation))
     # Add validation reports - procIds already in the table
     if len(toAddValidation) > 0:
         addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES '
@@ -294,6 +239,7 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
     toAddNew = [procId for procId in projectProcIds if procId not in dfGradeTable['proc_ord_id'].values][:(numberToAdd - len(toAddValidation))]
     
     # Add new reports
+    print("Number of new reports to grade:", len(toAddNew))
     if len(toAddNew) > 0:
         addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES '
         for procId in toAddNew:
@@ -307,12 +253,15 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
         addingReports.result()
     
     # Check: how many reports were added for the user?
-    getUserUnratedCount = 'SELECT * FROM lab.grader_table_with_metadata WHERE grader_name like "' + name + '" and grade = 999'
+    if (len(toAddValidation) + len(toAddNew)) == 0:
+        print("There are no reports returned by the specified query that have yet to be either graded or validated.")
+    else:
+        getUserUnratedCount = 'SELECT * FROM lab.grader_table_with_metadata WHERE grader_name like "' + name + '" and grade = 999'
 
-    df = client.query(getUserUnratedCount).to_dataframe()
-    
-    # Inform the user
-    print(len(df), "reports were added for grader", name)
+        df = client.query(getUserUnratedCount).to_dataframe()
+
+        # Inform the user
+        print(len(df), "reports were added for grader", name)
     
     
 def welcomeUser(name):
@@ -486,7 +435,71 @@ def backupReliabilityGrades(user):
                 updateJob = client.query(updateQ)
                 updateJob.result()
                 
+
+def printReport(procId, client, toHighlight={}):
+    # Get the report for that proc_ord_id from the primary report table
+    getReportRow = 'SELECT * FROM arcus.procedure_order where proc_ord_id = "'+str(procId)+'"'
+    reportDf = client.query(getReportRow).to_dataframe()
     
+    # If the id was in the new table:
+    if len(reportDf) == 1:
+        originTable = "arcus.procedure_order"
+        
+        getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id = "'+str(procId)+'"'
+        reportText = client.query(getReportRow).to_dataframe()['narrative_text'].values[0]
+        
+        getReportRow = 'SELECT * FROM arcus.procedure_order_impression where proc_ord_id = "'+str(procId)+'"'
+        reportDf = client.query(getReportRow).to_dataframe()
+        
+        if len(reportDf) == 1:
+            reportText += "\n\nIMPRESSION: " + reportDf['impression_text'].values[0]
+            
+    elif len(reportDf) == 0:
+        getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id = "'+str(procId)+'"'
+        reportDf = client.query(getReportRow).to_dataframe()
+        
+        if len(reportDf) > 0: 
+            originTable = "arcus.reports_annotations_master"
+            # Combine the narrative and impression text
+            reportText = reportDf['narrative_text'].values[0] 
+            if reportDf['impression_text'].values[0] != 'nan':
+                reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]        
+        
+    # If the user passed a dictionary of lists to highlight
+    if len(toHighlight.keys()) > 0:
+        for key in toHighlight.keys():
+            reportText = markTextColor(reportText, toHighlight[key], key)
+            
+    # Print the report and ask for a grade
+    print(reportText)
+    print()
+    # Print the proc_ord_id
+    print("Report id:", str(procId))
+    print()
+    
+
+def getGrade():
+    grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
+    while grade != "0" and grade != "1" and grade != "2" and grade != "-1":
+        grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
+    print()
+    
+    # Ask the user to confirm the grade
+    confirmGrade = "999"
+    while confirmGrade != grade :
+        while confirmGrade != "0" and confirmGrade != "1" and confirmGrade != "2" and confirmGrade != "-1":
+            confirmGrade = str(input("Please confirm your grade by reentering it OR enter a revised value to change the grade: "))
+        if confirmGrade != grade:
+            grade = confirmGrade
+            confirmGrade = "999"
+    
+    if confirmGrade == "-1":
+        print("This report is being marked as SKIPPED (-1) for you.")
+        return -1
+        
+    else:
+        print("Saving your grade of", grade, "for this report.")
+        return grade
     
 
 def getGraderStatusReport(name):
