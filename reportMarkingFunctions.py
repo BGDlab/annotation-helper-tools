@@ -5,6 +5,7 @@ from annotationHelperLib import *
 from IPython.display import clear_output
 from google.cloud import bigquery # SQL table interface on Arcus
 from collections import Counter 
+from datetime import date
 
 numUsersForValidation = 2
  
@@ -174,6 +175,8 @@ def markOneReportSQL(name, project, toHighlight = {}):
     # LOH - do more changes need to be made here to change the metadata in the table? I think no but ...
     # Update the grader table with the new grade
     updateQuery = 'UPDATE lab.grader_table_with_metadata set grade = '+str(grade)
+    today = date.today().strftime("%Y-%m-%d")
+    updateQuery += ', grade_date = "'+today+'"'
     updateQuery += ' WHERE proc_ord_id = "'+str(df['proc_ord_id'].values[0])+'"' 
     updateQuery += ' and grader_name like "' + name + '"'
 
@@ -223,13 +226,13 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
     print("Number of reports that need validating:", len(toAddValidation))
     # Add validation reports - procIds already in the table
     if len(toAddValidation) > 0:
-        addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES '
+        addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES '
         for procId in toAddValidation[:numberToAdd]:
             row = dfProject[dfProject['proc_ord_id'] == procId]
             addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
             addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
             addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
-            addReportsQuery += '", "arcus.procedure_order", "'+project+'"), '
+            addReportsQuery += '", "arcus.procedure_order", "'+project+'", "0000-00-00"), '
         addReportsQuery = addReportsQuery[:-2]+";"
         addingReports = client.query(addReportsQuery)
         addingReports.result()
@@ -241,13 +244,13 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
     # Add new reports
     print("Number of new reports to grade:", len(toAddNew))
     if len(toAddNew) > 0:
-        addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES '
+        addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES '
         for procId in toAddNew:
             row = dfProject[dfProject['proc_ord_id'] == procId]
             addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
             addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
             addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
-            addReportsQuery += '", "arcus.procedure_order", "'+project+'"), '
+            addReportsQuery += '", "arcus.procedure_order", "'+project+'", "0000-00-00"), '
         addReportsQuery = addReportsQuery[:-2]+";"
         addingReports = client.query(addReportsQuery)
         addingReports.result()
@@ -318,7 +321,7 @@ def addReliabilityReports(name):
     reliabilityDf = pd.read_csv("~/arcus/shared/reliability_report_info.csv")
     addReports = False
 
-    queryInsertReport = "INSERT into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project) VALUES"
+    queryInsertReport = "INSERT into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES"
     
     # print(graderDf['proc_ord_id'].values)
 
@@ -328,7 +331,8 @@ def addReliabilityReports(name):
             # Add the report
             queryInsertReport += " ('"+str(int(row['proc_ord_id']))+"', '"+name+"', 999, 'Reliability', '"
             queryInsertReport += row['pat_id']+"', "+str(row['age_in_days'])+", "+str(row['proc_ord_year'])+", '"
-            queryInsertReport += row['proc_name']+"', '"+row['report_origin_table']+"', '"+row['project']+"'),"
+            queryInsertReport += row['proc_name']+"', '"+row['report_origin_table']+"', '"+row['project']
+            queryInsertReport += "', '0000-00-00'),"
             addReports = True
 
     if addReports:
@@ -379,7 +383,8 @@ def releaseReports(graderName, reportsList):
     # For each report
     for procId in reportsList:
         # Update the grader table with the new grade
-        updateQuery = 'UPDATE lab.grader_table_with_metadata set grade = 999'
+        updateQuery = 'UPDATE lab.grader_table_with_metadata set grade = 999,'
+        updateQuery += ' grade_date="0000-00-00"'
         updateQuery += ' WHERE proc_ord_id = "'+str(procId)+'"'
         updateQuery += ' and grader_name = "' + graderName + '"'
 
@@ -420,7 +425,7 @@ def backupReliabilityGrades(user):
             addQ += "', "+str(primaryDf['grade'].values[0])+", 'Reliability', '"+str(primaryDf['pat_id'].values[0])
             addQ += "', "+str(primaryDf['age_in_days'].values[0])+", "+str(primaryDf['proc_ord_year'].values[0])
             addQ += ", '"+str(primaryDf['proc_name'].values[0])+"', '"+str(primaryDf['report_origin_table'].values[0])
-            addQ += "', '"+str(primaryDf['project'].values[0])+"') ;"
+            addQ += "', '"+str(primaryDf['project'].values[0])+"', '"+str(primaryDf['grade_date'].values[0])+"' ) ;"
             
             # addJob = client.query(addQ)
             # addJob.result()

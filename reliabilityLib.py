@@ -167,10 +167,10 @@ def printReportFromProcOrdId(procOrdId):
             reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]
             
     elif len(reportDf) == 0:
-        getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+        getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id like "'+str(procOrdId)+'"'
         reportText = client.query(getReportRow).to_dataframe()['narrative_text'].values[0]
         
-        getReportRow = 'SELECT * FROM arcus.procedure_order_impression where proc_ord_id like "'+str(df['proc_ord_id'].values[0])+'"'
+        getReportRow = 'SELECT * FROM arcus.procedure_order_impression where proc_ord_id like "'+str(procOrdId)+'"'
         reportDf = client.query(getReportRow).to_dataframe()
         
         if len(reportDf) == 1:
