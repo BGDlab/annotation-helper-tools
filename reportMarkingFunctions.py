@@ -9,6 +9,63 @@ from datetime import date
 
 numUsersForValidation = 2
  
+##
+# Regrade skipped reports
+# @param client A bigquery client object
+# @param grader A string of the grader's name (leave blank to review all flagged reports)
+def regradeSkippedReports(client, grader=""):
+    # Get the flagged reports
+    if grader == "":
+        q = "select * from lab.grader_table_with_metadata where grade = -1;"
+    else:
+        q = "select * from lab.grader_table_with_metadata where grade = -1 and grader_name = '"+grader+"';"
+    flaggedReports = client.query(q).to_dataframe()
+    
+    # for each flagged report
+    for idx, row in flaggedReports.iterrows():
+        clear_output()
+        print(str(idx+1)+"/"+str(len(flaggedReports)))
+        print()
+        printReport(row['proc_ord_id'], client)
+        print("Grader: ", row['grader_name'])
+        print()
+        # ask for grade
+        grade = getGrade()
+        print(grade)
+        
+        # Update the grader table with the new grade
+        updateQuery = 'UPDATE lab.grader_table_with_metadata set grade = '+str(grade)
+        updateQuery += ' WHERE proc_ord_id = "'+str(row['proc_ord_id'])+'"' 
+        updateQuery += ' and grader_name = "' + row['grader_name'] + '"'
+        
+        updateJob = client.query(updateQuery)
+        updateJob.result()
+        print("Grade saved. Run the cell again to grade another report.")    
+    
+##
+# Print a count of the number of reports graded by each grader since date d
+# @param d A string representation of the date in YYYY-MM-DD format
+def getGradeCountsSinceDate(d):
+    client = bigquery.Client()
+    
+    # Query the table
+    q = 'select * from lab.grader_table_with_metadata where grade_date != "0000-00-00" and cast(grade_date as date) >= cast("'+d+'" as date);'
+    df = client.query(q).to_dataframe()
+    
+    # Get the count of rows for each grader
+    graders = list(set(df['grader_name'].values))
+    
+    # Print the table header
+    print("# Reports \t Grader Name")
+    
+    # Print the rows for each grader
+    for grader in graders:
+        print(len(df[df['grader_name'] == grader]), '\t\t', grader)
+        
+    # Print a statement about who has not graded any reports
+    print()
+    print("Any graders not in the displayed table have not graded any reports since before "+d)
+    
     
 ##
 # Iteratively show the user all of the SLIP/non SLIP example reports in a random order (training step 1)
@@ -222,8 +279,10 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
             
     # projectReportsInTable = [procId for procId in projectProcIds if procId in dfGradeTable['proc_ord_id'].values and not dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "grader_name"].str.contains("Coarse Text Search").any() ]
     # Ignore procIds rated by User name
-    # toAddValidation = [procId for procId in procIdsNeedValidation if procId not in userProcIds][:numberToAdd]
+    toAddValidation = [procId for procId in toAddValidation if procId not in userProcIds][:numberToAdd]
     print("Number of reports that need validating:", len(toAddValidation))
+    print(numberToAdd)
+    
     # Add validation reports - procIds already in the table
     if len(toAddValidation) > 0:
         addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES '
@@ -233,6 +292,7 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
             addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
             addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
             addReportsQuery += '", "arcus.procedure_order", "'+project+'", "0000-00-00"), '
+        print(len(toAddValidation[:numberToAdd]))
         addReportsQuery = addReportsQuery[:-2]+";"
         addingReports = client.query(addReportsQuery)
         addingReports.result()
