@@ -107,7 +107,7 @@ def calculateKappa(userGrades1, userGrades2):
             
     # Calculate Cohen's kappa
     kappa = cohen_kappa_score(list(userGrades1["grade"].values), list(userGrades2["grade"].values))
-    print("Cohen's kappa:", kappa)
+    # print("Cohen's kappa:", kappa)
     return kappa
 
 
@@ -156,7 +156,7 @@ def printReportFromProcOrdId(procOrdId):
     client = bigquery.Client()
     
     # Get the report for that proc_ord_id from the primary report table
-    getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id like "'+str(procOrdId)+'"'
+    getReportRow = 'SELECT * FROM lab.reports_annotations_master where proc_ord_id like "'+str(procOrdId)+'"'
     reportDf = client.query(getReportRow).to_dataframe()
     
     # If the id was in the original table:

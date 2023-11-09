@@ -275,12 +275,13 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
             gradersStr = ", ".join(graders)
             # if the report was not graded by Coarse Text Search or the user and has not been graded N times
             if "Coarse Text Search" not in gradersStr and name not in gradersStr and len(graders) < numUsersForValidation:
-                toAddValidation.append(procId)   
+                toAddValidation.append(procId)  
             
     # projectReportsInTable = [procId for procId in projectProcIds if procId in dfGradeTable['proc_ord_id'].values and not dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "grader_name"].str.contains("Coarse Text Search").any() ]
     # Ignore procIds rated by User name
+    print("Number of reports that need to be validated:", len(toAddValidation))
     toAddValidation = [procId for procId in toAddValidation if procId not in userProcIds][:numberToAdd]
-    print("Number of reports that need validating:", len(toAddValidation))
+    print("Number of validation reports added:", len(toAddValidation))
     print(numberToAdd)
     
     # Add validation reports - procIds already in the table
@@ -505,6 +506,8 @@ def printReport(procId, client, toHighlight={}):
     # Get the report for that proc_ord_id from the primary report table
     getReportRow = 'SELECT * FROM arcus.procedure_order where proc_ord_id = "'+str(procId)+'"'
     reportDf = client.query(getReportRow).to_dataframe()
+    print(procId)
+    print(reportDf.shape)
     
     # If the id was in the new table:
     if len(reportDf) == 1:
@@ -520,11 +523,11 @@ def printReport(procId, client, toHighlight={}):
             reportText += "\n\nIMPRESSION: " + reportDf['impression_text'].values[0]
             
     elif len(reportDf) == 0:
-        getReportRow = 'SELECT * FROM arcus.reports_annotations_master where proc_ord_id = "'+str(procId)+'"'
+        getReportRow = 'SELECT * FROM lab.reports_annotations_master where proc_ord_id = "'+str(procId)+'"'
         reportDf = client.query(getReportRow).to_dataframe()
         
         if len(reportDf) > 0: 
-            originTable = "arcus.reports_annotations_master"
+            originTable = "lab.reports_annotations_master"
             # Combine the narrative and impression text
             reportText = reportDf['narrative_text'].values[0] 
             if reportDf['impression_text'].values[0] != 'nan':
