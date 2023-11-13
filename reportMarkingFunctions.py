@@ -298,7 +298,6 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
         addingReports = client.query(addReportsQuery)
         addingReports.result()
 
-    
     # New reports
     toAddNew = [procId for procId in projectProcIds if procId not in dfGradeTable['proc_ord_id'].values][:(numberToAdd - len(toAddValidation))]
     
