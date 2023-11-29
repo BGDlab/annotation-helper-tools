@@ -145,7 +145,7 @@ def markSelfEvalReportSQL(name, toHighlight = {}):
         return
     
     # Get the report for that proc_ord_id from the primary report table
-    getReportRow = 'SELECT * FROM arcus.training_examples_selfeval where combo_id like "'+str(df['report_id'].values[0])+'"'
+    getReportRow = 'SELECT * FROM lab.training_selfeval where combo_id like "'+str(df['report_id'].values[0])+'"'
     reportDf = client.query(getReportRow).to_dataframe()
     
     # Combine the narrative and impression text
