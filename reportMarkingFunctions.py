@@ -145,8 +145,10 @@ def markSelfEvalReportSQL(name, toHighlight = {}):
         return
     
     # Get the report for that proc_ord_id from the primary report table
-    getReportRow = 'SELECT * FROM lab.training_selfeval where report_id like "'+str(df['report_id'].values[0])+'"'
+    getReportRow = 'SELECT * FROM arcus_2023_05_02.reports_annotations_master where combo_id = "'+str(df['report_id'].values[0])+'"'
     reportDf = client.query(getReportRow).to_dataframe()
+    print(reportDf.shape)
+    print(list(reportDf))
     
     # Combine the narrative and impression text
     reportText = reportDf['narrative_text'].values[0] 
@@ -522,11 +524,11 @@ def printReport(procId, client, toHighlight={}):
             reportText += "\n\nIMPRESSION: " + reportDf['impression_text'].values[0]
             
     elif len(reportDf) == 0:
-        getReportRow = 'SELECT * FROM lab.reports_annotations_master where proc_ord_id = "'+str(procId)+'"'
+        getReportRow = 'SELECT * FROM arcus_2023_05_02.reports_annotations_master where proc_ord_id = "'+str(procId)+'"'
         reportDf = client.query(getReportRow).to_dataframe()
         
         if len(reportDf) > 0: 
-            originTable = "lab.reports_annotations_master"
+            originTable = "arcus_2023_05_02.reports_annotations_master"
             # Combine the narrative and impression text
             reportText = reportDf['narrative_text'].values[0] 
             if reportDf['impression_text'].values[0] != 'nan':
