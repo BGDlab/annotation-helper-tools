@@ -33,6 +33,8 @@ def regradeSkippedReports(client, grader=""):
         grade = getGrade()
         print(grade)
         
+        regradeReason = getReason('regrade')
+        
         # Update the grader table with the new grade
         updateQuery = 'UPDATE lab.grader_table_with_metadata set grade = '+str(grade)
         updateQuery += ' WHERE proc_ord_id = "'+str(row['proc_ord_id'])+'"' 
@@ -40,6 +42,16 @@ def regradeSkippedReports(client, grader=""):
         
         updateJob = client.query(updateQuery)
         updateJob.result()
+        
+        # Update the skipped reports table
+        updateSkippedQuery = 'update lab.skipped_reports set grade = '+str(grade)
+        updateSkippedQuery += ', regrade_reason = "'+regradeReason+'" '
+        updateSkippedQuery += 'where proc_ord_id = "'+str(row['proc_ord_id'])+'" and '
+        updateSkippedQuery += 'grader_name = "' + row['grader_name'] + '";'
+        
+        updateSkippedJob = client.query(updateQuery)
+        updateSkippedJob.result()
+            
         print("Grade saved. Run the cell again to grade another report.")    
     
 ##
@@ -228,8 +240,25 @@ def markOneReportSQL(name, project, toHighlight = {}):
         print("There are currently no reports to grade for", name, " in the table. Please add more to continue.")
         return
     
-    printReport(df['proc_ord_id'].values[0], client, toHighlight)
+    procOrdId = df['proc_ord_id'].values[0]
+    printReport(procOrdId, client, toHighlight)
     grade = getGrade()
+    
+    # write the case to handle the skipped reports
+    if grade == -1: 
+        # Ask the user for a reason
+        skip_reason = getReason("skip")
+        # Write a query to add the report to the skipped reports table. 
+        # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason')
+        skipReportQuery = "insert into lab.skipped_reports values ("
+        today = date.today().strftime("%Y-%m-%d")
+        skipReportQuery += "'"+str(procOrdId)+"', -1, '"+name+"', '"+today+"', '"+skip_reason+"', '', '');"
+        
+        # Execute the query
+        print(skipReportQuery)
+        skipReportJob = client.query(skipReportQuery)
+        skipReportJob.result()
+        
         
     # LOH - do more changes need to be made here to change the metadata in the table? I think no but ...
     # Update the grader table with the new grade
@@ -546,6 +575,19 @@ def printReport(procId, client, toHighlight={}):
     print("Report id:", str(procId))
     print()
     
+    
+def getReason(usage):
+    if usage == "skip":
+        message = "This report was skipped. Please include the part(s) of the report that were confusing:"
+    elif usage == "regrade":
+        message = "This report was previously skipped. Please include an explanation why it received its updated grade:"
+        
+    reason = str(input(message))
+    while type(reason) != str and len(reason) <= 5: #arbitrary minimum string length
+        reason = str(input(message))
+        
+    return reason
+
 
 def getGrade():
     grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
