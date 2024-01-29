@@ -534,7 +534,7 @@ def backupReliabilityGrades(user):
 
 def printReport(procId, client, toHighlight={}):
     # Get the report for that proc_ord_id from the primary report table
-    getReportRow = 'SELECT * FROM arcus.procedure_order where proc_ord_id = "'+str(procId)+'"'
+    getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id = "'+str(procId)+'"'
     reportDf = client.query(getReportRow).to_dataframe()
     print(procId)
     print(reportDf.shape)
@@ -553,15 +553,16 @@ def printReport(procId, client, toHighlight={}):
             reportText += "\n\nIMPRESSION: " + reportDf['impression_text'].values[0]
             
     elif len(reportDf) == 0:
-        getReportRow = 'SELECT * FROM arcus_2023_05_02.reports_annotations_master where proc_ord_id = "'+str(procId)+'"'
-        reportDf = client.query(getReportRow).to_dataframe()
+        print("proc_ord_id not in arcus.procedure_order_narrative:", procId)
+#         getReportRow = 'SELECT * FROM arcus_2023_05_02.reports_annotations_master where proc_ord_id = "'+str(procId)+'"'
+#         reportDf = client.query(getReportRow).to_dataframe()
         
-        if len(reportDf) > 0: 
-            originTable = "arcus_2023_05_02.reports_annotations_master"
-            # Combine the narrative and impression text
-            reportText = reportDf['narrative_text'].values[0] 
-            if reportDf['impression_text'].values[0] != 'nan':
-                reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]        
+#         if len(reportDf) > 0: 
+#             originTable = "arcus_2023_05_02.reports_annotations_master"
+#             # Combine the narrative and impression text
+#             reportText = reportDf['narrative_text'].values[0] 
+#             if reportDf['impression_text'].values[0] != 'nan':
+#                 reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]        
         
     # If the user passed a dictionary of lists to highlight
     if len(toHighlight.keys()) > 0:
