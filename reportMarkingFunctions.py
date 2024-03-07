@@ -21,38 +21,69 @@ def regradeSkippedReports(client, grader=""):
         q = "select * from lab.grader_table_with_metadata where grade = -1 and grader_name = '"+grader+"';"
     flaggedReports = client.query(q).to_dataframe()
     
+    # Shuffle the flagged reports
+    flaggedReports = flaggedReports.sample(frac=1)
+    
     # for each flagged report
+    count = 0
     for idx, row in flaggedReports.iterrows():
         clear_output()
-        print(str(idx+1)+"/"+str(len(flaggedReports)))
+        count += 1
+        print(str(count)+"/"+str(len(flaggedReports)))
         print()
-        printReport(row['proc_ord_id'], client)
+        # Add a print to show why the report was previously flagged
+        # Check if the report is in the lab.skipped_reports table
+        checkSkippedQuery = "select * from lab.skipped_reports where proc_ord_id = '"+str(row['proc_ord_id'])
+        checkSkippedQuery += "' and grader_name = '"+row['grader_name']+"';"
+        skippedDf = client.query(checkSkippedQuery).to_dataframe()
+        
+        isSkipLogged = False
+        if len(skippedDf) == 1:
+            isSkipLogged = True
+            
+        if isSkipLogged:
+            print("Reason report was flagged:", skippedDf['skip_reason'].values[0])
+        else:
+            print("Skipped reason not available.")                                                          
+        
+        # Print the report
+        procOrdId = row['proc_ord_id']
+        printReport(procOrdId, client)
         print("Grader: ", row['grader_name'])
         print()
         # ask for grade
         grade = getGrade()
         print(grade)
         
-        regradeReason = getReason('regrade')
-        
-        # Update the grader table with the new grade
-        updateQuery = 'UPDATE lab.grader_table_with_metadata set grade = '+str(grade)
-        updateQuery += ' WHERE proc_ord_id = "'+str(row['proc_ord_id'])+'"' 
-        updateQuery += ' and grader_name = "' + row['grader_name'] + '"'
-        
-        updateJob = client.query(updateQuery)
-        updateJob.result()
-        
-        # Update the skipped reports table
-        updateSkippedQuery = 'update lab.skipped_reports set grade = '+str(grade)
-        updateSkippedQuery += ', regrade_reason = "'+regradeReason+'" '
-        updateSkippedQuery += 'where proc_ord_id = "'+str(row['proc_ord_id'])+'" and '
-        updateSkippedQuery += 'grader_name = "' + row['grader_name'] + '";'
-        
-        updateSkippedJob = client.query(updateQuery)
-        updateSkippedJob.result()
+        if grade != -1:
+            regradeReason = getReason('regrade')
+
+            # Update the grader table with the new grade
+            updateQuery = 'UPDATE lab.grader_table_with_metadata set grade = '+str(grade)
+            updateQuery += ' WHERE proc_ord_id = "'+str(procOrdId)+'"' 
+            updateQuery += ' and grader_name = "' + row['grader_name'] + '"'
+
+            updateJob = client.query(updateQuery)
+            updateJob.result()
             
-        print("Grade saved. Run the cell again to grade another report.")    
+            if isSkipLogged:
+                # Update the skipped reports table
+                updateSkippedQuery = 'update lab.skipped_reports set grade = '+str(grade)
+                updateSkippedQuery += ', regrade_reason = "'+regradeReason+'" '
+                updateSkippedQuery += 'where proc_ord_id = "'+str(procOrdId)+'" and '
+                updateSkippedQuery += 'grader_name = "' + row['grader_name'] + '";'
+
+                updateSkippedJob = client.query(updateQuery)
+                updateSkippedJob.result()
+            else:
+                # Add the report to the skipped reports table. 
+                # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason')
+                skipReportQuery = "insert into lab.skipped_reports values ("
+                today = date.today().strftime("%Y-%m-%d")
+                skipReportQuery += "'"+str(procOrdId)+"',"+str(grade)+", '"+row['grader_name']+"', '', '', '"+today+"', '"+regradeReason+"');"
+            
+            print("New grade saved. Run the cell again to grade another report.")   
+            
     
 ##
 # Print a count of the number of reports graded by each grader since date d
