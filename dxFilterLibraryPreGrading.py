@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import random
 import os
+import json
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
 from google.cloud import bigquery # SQL table interface on Arcus

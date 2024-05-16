@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import random
 from annotationHelperLib import *
+from dxFilterLibraryPreGrading import *
 from IPython.display import clear_output
 from google.cloud import bigquery # SQL table interface on Arcus
 from collections import Counter 
@@ -12,14 +13,21 @@ numUsersForValidation = 2
 ##
 # Regrade skipped reports
 # @param client A bigquery client object
+# @param project_name A string used to identify the project
 # @param grader A string of the grader's name (leave blank to review all flagged reports)
-def regradeSkippedReports(client, grader=""):
+# @param flag The level of "skip" to examine (-1 is group, -2 is clinician)
+def regradeSkippedReports(client, project_name, grader="", flag=-1):
+    print("Examining the skipped reports for", project_name)
+    
     # Get the flagged reports
     if grader == "":
-        q = "select * from lab.grader_table_with_metadata where grade = -1;"
+        q = "select * from lab.grader_table_with_metadata where grade = "+str(flag)+";"
     else:
-        q = "select * from lab.grader_table_with_metadata where grade = -1 and grader_name = '"+grader+"';"
+        q = "select * from lab.grader_table_with_metadata where grade = "+str(flag)+" and grader_name = '"+grader+"';"
     flaggedReports = client.query(q).to_dataframe()
+    
+    if flaggedReports.shape[0] == 0:
+        print("There are currently no reports with the grade of", flag)
     
     # Shuffle the flagged reports
     flaggedReports = flaggedReports.sample(frac=1)
@@ -52,10 +60,10 @@ def regradeSkippedReports(client, grader=""):
         print("Grader: ", row['grader_name'])
         print()
         # ask for grade
-        grade = getGrade()
+        grade = getGrade(enable_md_flag=True)
         print(grade)
         
-        if grade != -1:
+        if grade != -1 or grade != -2:
             regradeReason = getReason('regrade')
 
             # Update the grader table with the new grade
@@ -273,9 +281,9 @@ def markOneReportSQL(name, project, toHighlight = {}):
     
     procOrdId = df['proc_ord_id'].values[0]
     printReport(procOrdId, client, toHighlight)
-    grade = getGrade()
+    grade = getGrade(enable_md_flag = False)
     
-    # write the case to handle the skipped reports
+    # write the case to handle the skipped reports #TODO - make sure that a regular user can't mark -2 on an original report
     if grade == -1: 
         # Ask the user for a reason
         skip_reason = getReason("skip")
@@ -283,7 +291,7 @@ def markOneReportSQL(name, project, toHighlight = {}):
         # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason')
         skipReportQuery = "insert into lab.skipped_reports values ("
         today = date.today().strftime("%Y-%m-%d")
-        skipReportQuery += "'"+str(procOrdId)+"', -1, '"+name+"', '"+today+"', '"+skip_reason+"', '', '');"
+        skipReportQuery += "'"+str(procOrdId)+"', "+grade+", '"+name+"', '"+today+"', '"+skip_reason+"', '', '');"
         
         # Execute the query
         print(skipReportQuery)
@@ -306,22 +314,45 @@ def markOneReportSQL(name, project, toHighlight = {}):
 ##
 # Get more proc_ord_id for which no reports have been rated for the specified user to grade
 # @param name A str containing the full name of the grader (to also be referenced in publications)
-def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt", numberToAdd=50):
+def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
     # Global var declaration
     global numUsersForValidation
     print("It is expected for this function to take several minutes to run. Your patience is appreciated.")
     
     # Initialize the client service
-    client = bigquery.Client()
+    client = bigquery.Client()  
+    
+    # Load the config file
+    fn = "./queries/config.json" ## write this file
+    with open(fn, "r") as f:
+        project_lookup = json.load(f)
+        
+    # Get the info for the specified project
+    project_info = project_lookup[project_id]
+    queryFn = project_info['query']
+    q_dx_filter = ''
+    if 'dx_filter' in project_info:
+        # Get the name of the dx filter file
+        fn_dx_filter = project_info['dx_filter']
+        # Convert the contents of the dx filter file to a sql query
+        q_dx_filter = convertExcludeDxCsvToSql(fn_dx_filter)
     
     # Open the specified query file
     with open(queryFn, 'r') as f:
-        qProject = f.read()
-    # Run the query from the specified file
-    dfProject = client.query(qProject).to_dataframe()
+        q_project = f.read()
+        
+    # If there is a dx filter, incorporate it into the loaded query
+    if q_dx_filter != "":
+        q_tmp = q_dx_filter + q_project.split("where")[0] 
+        q_tmp += "left join exclude_table on proc_ord.pat_id = exclude_table.pat_id where exclude_table.pat_id is null and"
+        q_tmp += q_project.split("where")[1]
+        q_project = q_tmp
+        
+    # Run the query from the specified file -- should the query itself be passed to a dx filtering option?
+    dfProject = client.query(q_project).to_dataframe()
     # Now we have the ids of the reports we want to grade for Project project
     projectProcIds = dfProject['proc_ord_id'].values 
-    print("Number of ids for project", project, len(projectProcIds))
+    print("Number of ids for project", project_id, len(projectProcIds))
     
     # Get the proc_ord_ids from the grader table
     qGradeTable = "SELECT proc_ord_id, grader_name from lab.grader_table_with_metadata where grade_category='Unique'; "
@@ -354,7 +385,7 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
             addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
             addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
             addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
-            addReportsQuery += '", "arcus.procedure_order", "'+project+'", "0000-00-00"), '
+            addReportsQuery += '", "arcus.procedure_order", "'+project_id+'", "0000-00-00"), '
         print(len(toAddValidation[:numberToAdd]))
         addReportsQuery = addReportsQuery[:-2]+";"
         addingReports = client.query(addReportsQuery)
@@ -372,7 +403,7 @@ def getMoreReportsToGrade(name, project="SLIP", queryFn="./queries/slip_base.txt
             addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
             addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
             addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
-            addReportsQuery += '", "arcus.procedure_order", "'+project+'", "0000-00-00"), '
+            addReportsQuery += '", "arcus.procedure_order", "'+project_id+'", "0000-00-00"), '
         addReportsQuery = addReportsQuery[:-2]+";"
         addingReports = client.query(addReportsQuery)
         addingReports.result()
@@ -621,25 +652,53 @@ def getReason(usage):
     return reason
 
 
-def getGrade():
+def getGrade(enable_md_flag = False):
+        
+    if enable_md_flag:
+        potential_grades = ["0", "1", "2", "-1", "-2"]
+    else:
+        potential_grades = ["0", "1", "2", "-1"]
+        
     grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
-    while grade != "0" and grade != "1" and grade != "2" and grade != "-1":
-        grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
+    while grade not in potential_grades:
+        if not enable_md_flag:
+            if grade == "-2":
+                print("Reports cannot be marked for clinician review without undergoing peer review first. Please flag using a grade of -1 instead.")
+                message = "Please enter a grade value from the acceptable grade list (0/1/2/-1): "
+                grade = str(input(message))
+            else:
+                grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
+        else:
+            grade = str(input('Invalid input. Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip/-2 escalate to MD): '))
+
+            
     print()
     
     # Ask the user to confirm the grade
     confirmGrade = "999"
     while confirmGrade != grade :
-        while confirmGrade != "0" and confirmGrade != "1" and confirmGrade != "2" and confirmGrade != "-1":
-            confirmGrade = str(input("Please confirm your grade by reentering it OR enter a revised value to change the grade: "))
+        while confirmGrade not in potential_grades:
+            if not enable_md_flag and confirmGrade == "-2":
+                print("Reports cannot be marked for clinician review without undergoing peer review first. Please flag using a grade of -1 instead.")
+                message = "Please enter a grade value from the acceptable grade list (0/1/2/-1): "
+            else:
+                message = "Please confirm your grade by reentering it OR enter a revised value to change the grade: "
+            confirmGrade = str(input(message))
         if confirmGrade != grade:
-            grade = confirmGrade
-            confirmGrade = "999"
+            if not enable_md_flag and confirmGrade == "-2":
+                print("Reports cannot be marked for clinician review without undergoing peer review first. Please flag using a grade of -1 instead.")
+                message = "Please enter a grade value from the acceptable grade list (0/1/2/-1): "
+                confirmGrade = str(input(message))
+            else:
+                grade = confirmGrade
+                confirmGrade = "999"
     
     if confirmGrade == "-1":
         print("This report is being marked as SKIPPED (-1) for you.")
         return -1
-        
+    elif confirmGrade == "-2": 
+        print("WARNING: this report is being marked as SKIPPED for you AND is being escalated to a clinician for further review.")
+        return -2
     else:
         print("Saving your grade of", grade, "for this report.")
         return grade
