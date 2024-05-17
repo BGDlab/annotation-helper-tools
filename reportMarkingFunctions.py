@@ -16,14 +16,18 @@ numUsersForValidation = 2
 # @param project_name A string used to identify the project
 # @param grader A string of the grader's name (leave blank to review all flagged reports)
 # @param flag The level of "skip" to examine (-1 is group, -2 is clinician)
-def regradeSkippedReports(client, project_name, grader="", flag=-1):
-    print("Examining the skipped reports for", project_name)
-    
+def regradeSkippedReports(client, project_name="", grader="", flag=-1):   
     # Get the flagged reports
     if grader == "":
-        q = "select * from lab.grader_table_with_metadata where grade = "+str(flag)+";"
+        q = "select * from lab.grader_table_with_metadata where grade = "+str(flag)
     else:
-        q = "select * from lab.grader_table_with_metadata where grade = "+str(flag)+" and grader_name = '"+grader+"';"
+        q = "select * from lab.grader_table_with_metadata where grade = "+str(flag)+" and grader_name = '"+grader+"'"
+        
+    if project_name != "":
+        print("Examining the skipped reports for", project_name)
+        q += " and project = '"+project_name+"'"
+        
+    q += ";"
     flaggedReports = client.query(q).to_dataframe()
     
     if flaggedReports.shape[0] == 0:
@@ -279,6 +283,8 @@ def markOneReportSQL(name, project, toHighlight = {}):
         print("There are currently no reports to grade for", name, " in the table. Please add more to continue.")
         return
     
+    print("Year of scan:", df['proc_ord_year'].values[0])
+    print("Age at scan:", df['age_in_days'].values[0])
     procOrdId = df['proc_ord_id'].values[0]
     printReport(procOrdId, client, toHighlight)
     grade = getGrade(enable_md_flag = False)
@@ -337,6 +343,7 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
         # Convert the contents of the dx filter file to a sql query
         q_dx_filter = convertExcludeDxCsvToSql(fn_dx_filter)
     
+    ## --- I think this was put into a function?
     # Open the specified query file
     with open(queryFn, 'r') as f:
         q_project = f.read()
@@ -347,6 +354,7 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
         q_tmp += "left join exclude_table on proc_ord.pat_id = exclude_table.pat_id where exclude_table.pat_id is null and"
         q_tmp += q_project.split("where")[1]
         q_project = q_tmp
+    ## ---
         
     # Run the query from the specified file -- should the query itself be passed to a dx filtering option?
     dfProject = client.query(q_project).to_dataframe()
