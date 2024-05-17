@@ -1,3 +1,5 @@
+Current release: 2024-05-17
+
 ## Introduction
 
 Thank you in advance for assisting in the radiology report grading process.
@@ -55,42 +57,6 @@ These examples are labelled as CLIP or not CLIP (True or False in the `confirm_c
 2 - No Pathology: the report contains an utter lack of pathology in the brain and the impression is "unremarkable"
 
 
-Keywords (updated 2022-06-13):
-- Special Cases:
-  - Chiari malformation: is it small enough that there is no measurement, if it’s borderline, or if the brain is otherwise remarkable, the scan can be marked as no pathology. If there’s multiple things going on in addition to the Chiari malformation or the malformation has a measurement associated with it, it’s more likely a scan containing pathology
-  - Outside Scan: Go ahead and mark those reports ("This is an outside scan") as 0. Chances are we wouldn’t be able to get those scans since they didn’t actually happen at CHOP and there’s no way to confirm what’s going on in them
-  - Otherwise unremarkable: check for other keywords in the
-
-- Gross Pathology Keywords (Rating 0):
-  - chemo
-  - craniectomy
-  - craniotomy
-  - shunt
-  - postop/post op/post-op/post surg/surgical cavity/surgical site/resection
-  - glioblastoma
-  - glioma
-  - astrocytoma
-  - Most -omas, otomy, and -ectomy
-  
-- Mild Pathology Keywords (Rating 1):
-  - orthodontic hardware
-  - motion/patient motion/patient movement/motion degrad/degraded by motion
-  - patient motion/motion artifact
-  - virchow-robin
-  - pineal cyst
-  - pars intermedia cyst
-  - enlarged ventricles
-  - prominent CSF
-  - "slight enlargment"
-  - "mild"
-  
-- No Pathology Keywords (Rating 2):
-  - Unremarkable brain/scan/MRI
-  
-- Not relevant to pathology grades:
-  - opacification of the sinus cavities
-
-
 ## Reliability Ratings
 
 When you finish the self evaluation and understand any mismatches between your ratings and the "ground truth" ratings, you will open the final spreadsheet (reliability ratings) using the .ipynb. NOTE: do not open this file in Excel, Sheets, or Numbers - this spreadsheet is used for measuring reliability between raters and must be saved in an unaltered .csv file. (Excel/Sheets/Numbers have a tendency to impose formatting on data that is then saved in its modified form. Example: a numeric session id 123456789 could be forced into scientific notation and saved as 1.23E8, which is bad for our purposes.)
@@ -110,3 +76,16 @@ Customizations: You may find as you go that there are certain words that help yo
 ## Next Steps
 
 Contact the project maintainer to return the updated reliability ratings file and obtain more reports to grade.
+
+## Release Notes
+
+### 2024-05-17
+
+**TL;DR**
+- Diagnosis (dx) filter incorporated into report queuing: for any defined project cohort, any patients who have diagnoses that disqualify them from the study are filtered out before they can be added to a grader's queue
+- Flag for clinician review: if during a group review session a decision about the grade of a flagged report cannot be reached, the report can be given a grade of -2 to bump it into a separate queue for clinician review.
+
+**Details**
+- Expanded cohort definition: each project cohort is defined using a project name ("SLIP", "SLIP Adolescents", "SLIP Elementary", etc.), a SQL query stored in a .txt file to identify patients within given age limits and scans obtained within a certain period of time, and an optional .csv file containing phecodes marked as exclude (specific format)
+- Diagnosis filter incorporated: for a defined project cohort, there is an option to include a table of phecodes to exclude. When reports for that project are added to a grader's report queue, they first undergo filtering to prevent patients with excluded diagnoses from being added to the table.
+- Flag for clinician review: a second level of report flagging (-2) has been added. It is currently set up to only be available during review of reports previously flagged with the -1 grade. There is the potential to expand the availability of the -2 flag in the future.
