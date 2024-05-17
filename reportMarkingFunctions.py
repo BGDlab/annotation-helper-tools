@@ -664,10 +664,12 @@ def getGrade(enable_md_flag = False):
         
     if enable_md_flag:
         potential_grades = ["0", "1", "2", "-1", "-2"]
+        grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip/-2 escalate to clinician): '))
+
     else:
         potential_grades = ["0", "1", "2", "-1"]
-        
-    grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
+        grade = str(input('Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): '))
+
     while grade not in potential_grades:
         if not enable_md_flag:
             if grade == "-2":
