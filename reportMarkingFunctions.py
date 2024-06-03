@@ -297,10 +297,10 @@ def markOneReportSQL(name, project, toHighlight = {}):
         # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason')
         skipReportQuery = "insert into lab.skipped_reports values ("
         today = date.today().strftime("%Y-%m-%d")
-        skipReportQuery += "'"+str(procOrdId)+"', "+grade+", '"+name+"', '"+today+"', '"+skip_reason+"', '', '');"
+        skipReportQuery += "'"+str(procOrdId)+"', "+str(grade)+", '"+name+"', '"+str(today)+"', '"+skip_reason+"', '', '');"
         
         # Execute the query
-        print(skipReportQuery)
+        # print(skipReportQuery)
         skipReportJob = client.query(skipReportQuery)
         skipReportJob.result()
         
