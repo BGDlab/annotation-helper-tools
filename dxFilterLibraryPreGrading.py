@@ -22,6 +22,8 @@ def mapProcReqToPheCodes(tableName, verbose=False):
       select
         req.pat_id, 
         'arcus.problem_list' as dx_source,
+        dx.dx_id,
+        
         case 
           when dx.dx_id is null then "2475657929"
           else dx.dx_id end as dx_id

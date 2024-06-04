@@ -1,8 +1,8 @@
 select
   proc_ord.pat_id,
-  pat.sex,
-  pat.race,
-  pat.dob_year,
+  req.sex,
+  req.race,
+  req.dob_year,
   proc_ord.proc_ord_id,
   proc_ord.proc_ord_year,
   proc_ord.start_datetime,
