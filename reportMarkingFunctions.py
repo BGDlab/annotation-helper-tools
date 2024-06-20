@@ -270,14 +270,15 @@ def markOneReportSQL(name, project, toHighlight = {}):
     client = bigquery.Client()
     
     # Get a row from the grader table for the specified rater that has not been graded yet - start with Reliability
-    getSingleRowQuery = 'SELECT * FROM lab.grader_table_with_metadata WHERE grader_name = "' + name + '" and grade = 999 and grade_category = "Reliability" LIMIT 1'
+    getSingleRowQuery = 'SELECT * FROM lab.grader_table_with_metadata grader inner join arcus_2023_04_05.procedure_order_narrative narr on narr.proc_ord_id = grader.proc_ord_id WHERE grader_name = "' + name + '" and grade = 999 and grade_category = "Reliability" LIMIT 1'
     df = client.query(getSingleRowQuery).to_dataframe()
+    source_table = "arcus_2023_04_05.procedure_order_narrative"
     
     if len(df) == 0:
         # Get a row from the grader table for the specified rater that has not been graded yet - if no Reliability, then Unique
         getSingleRowQuery = 'SELECT * FROM lab.grader_table_with_metadata WHERE grader_name = "' + name + '" and grade = 999 and grade_category = "Unique" LIMIT 1'
         df = client.query(getSingleRowQuery).to_dataframe()
-        
+        source_table = "arcus.procedure_order_narrative"
     
     if len(df) == 0:
         print("There are currently no reports to grade for", name, " in the table. Please add more to continue.")
@@ -286,7 +287,7 @@ def markOneReportSQL(name, project, toHighlight = {}):
     print("Year of scan:", df['proc_ord_year'].values[0])
     print("Age at scan:", df['age_in_days'].values[0])
     procOrdId = df['proc_ord_id'].values[0]
-    printReport(procOrdId, client, toHighlight)
+    printReport(procOrdId, client, toHighlight, source_table) # -- LOH
     grade = getGrade(enable_md_flag = False)
     
     # write the case to handle the skipped reports #TODO - make sure that a regular user can't mark -2 on an original report
@@ -602,12 +603,14 @@ def backupReliabilityGrades(user):
                 updateJob.result()
                 
 
-def printReport(procId, client, toHighlight={}):
-    # Get the report for that proc_ord_id from the primary report table
-    getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id = "'+str(procId)+'"'
-    reportDf = client.query(getReportRow).to_dataframe()
-    print(procId)
-    print(reportDf.shape)
+def printReport(procId, client, toHighlight={}, sourceTable="arcus.procedure_order_narrative"):
+    print(sourceTable)
+    try: 
+        # Get the report for that proc_ord_id from the primary report table
+        getReportRow = 'SELECT * FROM '+ sourceTable+' where proc_ord_id like "'+str(procId)+'"'
+        reportDf = client.query(getReportRow).to_dataframe()
+    except:
+        print("AN ERROR HAS OCCURRED: REPORT", procId, "CANNOT BE FOUND IN", sourceTable)
     
     # If the id was in the new table:
     if len(reportDf) == 1:
