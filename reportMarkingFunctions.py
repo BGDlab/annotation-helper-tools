@@ -614,19 +614,20 @@ def printReport(procId, client, toHighlight={}, sourceTable="arcus.procedure_ord
     
     # If the id was in the new table:
     if len(reportDf) == 1:
-        originTable = "arcus.procedure_order"
+        originTable = sourceTable
+        domain = sourceTable.split(".")[0]
         
-        getReportRow = 'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id = "'+str(procId)+'"'
+        getReportRow = 'SELECT * FROM '+domain+'.procedure_order_narrative where proc_ord_id = "'+str(procId)+'"'
         reportText = client.query(getReportRow).to_dataframe()['narrative_text'].values[0]
         
-        getReportRow = 'SELECT * FROM arcus.procedure_order_impression where proc_ord_id = "'+str(procId)+'"'
+        getReportRow = 'SELECT * FROM '+domain+'.procedure_order_impression where proc_ord_id = "'+str(procId)+'"'
         reportDf = client.query(getReportRow).to_dataframe()
         
         if len(reportDf) == 1:
             reportText += "\n\nIMPRESSION: " + reportDf['impression_text'].values[0]
             
     elif len(reportDf) == 0:
-        print("proc_ord_id not in arcus.procedure_order_narrative:", procId)
+        print("proc_ord_id not in", sourceTable, ":", procId)
 #         getReportRow = 'SELECT * FROM arcus_2023_05_02.reports_annotations_master where proc_ord_id = "'+str(procId)+'"'
 #         reportDf = client.query(getReportRow).to_dataframe()
         
