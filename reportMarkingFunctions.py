@@ -285,7 +285,7 @@ def markOneReportSQL(name, project, toHighlight = {}):
         return
     
     print("Year of scan:", df['proc_ord_year'].values[0])
-    print("Age at scan:", df['age_in_days'].values[0])
+    print("Age at scan:", np.round(df['age_in_days'].values[0]/365.25, 2), "years")
     procOrdId = df['proc_ord_id'].values[0]
     printReport(procOrdId, client, toHighlight, source_table) # -- LOH
     grade = getGrade(enable_md_flag = False)
@@ -364,7 +364,7 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
     print("Number of ids for project", project_id, len(projectProcIds))
     
     # Get the proc_ord_ids from the grader table
-    qGradeTable = "SELECT proc_ord_id, grader_name from lab.grader_table_with_metadata where grade_category='Unique'; "
+    qGradeTable = "SELECT proc_ord_id, grader_name from lab.grader_table_with_metadata where grade_category='Unique' and project='"+project_id+"' ; "
     dfGradeTable = client.query(qGradeTable).to_dataframe()
     gradeTableProcIds = dfGradeTable['proc_ord_id'].values
     userProcIds = dfGradeTable[dfGradeTable['grader_name'] == name]['proc_ord_id'].values
@@ -381,7 +381,7 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
             
     # projectReportsInTable = [procId for procId in projectProcIds if procId in dfGradeTable['proc_ord_id'].values and not dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "grader_name"].str.contains("Coarse Text Search").any() ]
     # Ignore procIds rated by User name
-    print("Number of reports that need to be validated:", len(toAddValidation))
+    print("Number of reports that need to be validated for "+project_id+":", len(toAddValidation))
     toAddValidation = [procId for procId in toAddValidation if procId not in userProcIds][:numberToAdd]
     print("Number of validation reports added:", len(toAddValidation))
     print(numberToAdd)
@@ -426,7 +426,7 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
         df = client.query(getUserUnratedCount).to_dataframe()
 
         # Inform the user
-        print(len(df), "reports were added for grader", name)
+        print(len(df), "reports are in the queue for grader", name)
     
     
 def welcomeUser(name):
@@ -627,17 +627,16 @@ def printReport(procId, client, toHighlight={}, sourceTable="arcus.procedure_ord
             reportText += "\n\nIMPRESSION: " + reportDf['impression_text'].values[0]
             
     elif len(reportDf) == 0:
-        print("proc_ord_id not in", sourceTable, ":", procId)
-#         getReportRow = 'SELECT * FROM arcus_2023_05_02.reports_annotations_master where proc_ord_id = "'+str(procId)+'"'
-#         reportDf = client.query(getReportRow).to_dataframe()
-        
-#         if len(reportDf) > 0: 
-#             originTable = "arcus_2023_05_02.reports_annotations_master"
-#             # Combine the narrative and impression text
-#             reportText = reportDf['narrative_text'].values[0] 
-#             if reportDf['impression_text'].values[0] != 'nan':
-#                 reportText += '\n\nIMPRESSION: ' + reportDf['impression_text'].values[0]        
-        
+        print("proc_ord_id not in", sourceTable, ":", procId)   
+
+    reportText = " ".join(reportText.split())
+    reportText = reportText.replace("CLINICAL INDICATION", "\n\nCLINICAL INDICATION")
+    reportText = reportText.replace("TECHNIQUE", "\n\nTECHNIQUE")
+    reportText = reportText.replace("HISTORY", "\n\nHISTORY")
+    reportText = reportText.replace("IMPRESSION", "\n\nIMPRESSION")
+    reportText = reportText.replace("FINDINGS", "\n\nFINDINGS")
+    reportText = reportText.replace("COMPARISON", "\n\nCOMPARISON")
+    
     # If the user passed a dictionary of lists to highlight
     if len(toHighlight.keys()) > 0:
         for key in toHighlight.keys():
@@ -723,7 +722,7 @@ def getGraderStatusReport(name):
     
     query = "select * from lab.grader_table_with_metadata where "
     query += "grader_name = '"+ name +"';"
-    
+    print(query)
     df = client.query(query).to_dataframe()
     
     # Case: user not in table

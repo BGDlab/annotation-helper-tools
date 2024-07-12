@@ -20,6 +20,7 @@ where
   and proc_ord.proc_ord_desc not like "%METABOLIC%"
   and proc_ord.proc_ord_desc not like "%AUTOPSY%"
   and proc_ord.proc_ord_desc like "%BRAIN%"
+  and proc_ord.proc_ord_year >= 2010
 order by 
   case when pat.gestational_age_num is not null then 0 else 1 end asc,
   proc_ord.start_datetime desc ;

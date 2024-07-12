@@ -12,7 +12,7 @@ from
   lab.requested_sessions_main_with_metadata req
   join arcus.procedure_order proc_ord on proc_ord.pat_id = req.pat_id
 where 
-  req.project = "Clinical Imaging Genetics" 
+  req.project like "%Clinical Imaging Genetics%" 
   and req.grade_category = "Not Graded"
 order by 
   proc_ord.start_datetime desc;
