@@ -341,8 +341,10 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
     if 'dx_filter' in project_info:
         # Get the name of the dx filter file
         fn_dx_filter = project_info['dx_filter']
+        # Expand the tilda for each user
+        fn_dx_filter_full = os.path.expanduser(fn_dx_filter)
         # Convert the contents of the dx filter file to a sql query
-        q_dx_filter = convertExcludeDxCsvToSql(fn_dx_filter)
+        q_dx_filter = convertExcludeDxCsvToSql(fn_dx_filter_full)
     
     ## --- I think this was put into a function?
     # Open the specified query file

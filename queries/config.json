@@ -1,27 +1,27 @@
 {
     "SLIP": {
         "query": "./queries/slip_base.txt",
-        "dx_filter": "/home/youngjm/bgdlab/code/filter-scans-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "SLIP Neonates": {
         "query": "./queries/slip_neonates.txt",
-        "dx_filter": "/home/youngjm/bgdlab/code/filter-scans-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "SLIP Toddlers": {
         "query": "./queries/slip_toddlers.txt",
-        "dx_filter": "/home/youngjm/bgdlab/code/filter-scans-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "SLIP PreK": {
         "query": "./queries/slip_prek.txt",
-        "dx_filter": "/home/youngjm/bgdlab/code/filter-scans-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "SLIP Elementary": {
         "query": "./queries/slip_elementary.txt",
-        "dx_filter": "/home/youngjm/bgdlab/code/filter-scans-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "SLIP Adolescents": {
         "query": "./queries/slip_adolescents.txt",
-        "dx_filter": "/home/youngjm/bgdlab/code/filter-scans-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "Clinical Imaging Genetics": {
         "query": "./queries/clinical_imaging_genetics.txt"
