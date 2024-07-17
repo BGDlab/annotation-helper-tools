@@ -25,5 +25,8 @@
     },
     "Clinical Imaging Genetics": {
         "query": "./queries/clinical_imaging_genetics.txt"
+    },
+    "Pb Cohort": {
+        "query": "./queries/pb_all.txt"
     }
 }

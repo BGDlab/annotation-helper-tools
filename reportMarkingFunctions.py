@@ -25,7 +25,7 @@ def regradeSkippedReports(client, project_name="", grader="", flag=-1):
         
     if project_name != "":
         print("Examining the skipped reports for", project_name)
-        q += " and project = '"+project_name+"'"
+        q += " and project like '%"+project_name+"%'"
         
     q += ";"
     flaggedReports = client.query(q).to_dataframe()
@@ -366,7 +366,7 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
     print("Number of ids for project", project_id, len(projectProcIds))
     
     # Get the proc_ord_ids from the grader table
-    qGradeTable = "SELECT proc_ord_id, grader_name from lab.grader_table_with_metadata where grade_category='Unique' and project='"+project_id+"' ; "
+    qGradeTable = "SELECT proc_ord_id, grader_name from lab.grader_table_with_metadata where grade_category='Unique' and project like '%"+project_id+"%' ; "
     dfGradeTable = client.query(qGradeTable).to_dataframe()
     gradeTableProcIds = dfGradeTable['proc_ord_id'].values
     userProcIds = dfGradeTable[dfGradeTable['grader_name'] == name]['proc_ord_id'].values
@@ -396,7 +396,7 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
             addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
             addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
             addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
-            addReportsQuery += '", "arcus.procedure_order", "'+project_id+'", "0000-00-00"), '
+            addReportsQuery += '", "arcus.procedure_order", "'+str(row['project']),+'", "0000-00-00"), '
         print(len(toAddValidation[:numberToAdd]))
         addReportsQuery = addReportsQuery[:-2]+";"
         addingReports = client.query(addReportsQuery)
