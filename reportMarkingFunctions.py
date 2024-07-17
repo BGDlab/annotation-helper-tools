@@ -396,7 +396,7 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
             addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
             addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
             addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
-            addReportsQuery += '", "arcus.procedure_order", "'+str(row['project']),+'", "0000-00-00"), '
+            addReportsQuery += '", "arcus.procedure_order", "'+project+'", "0000-00-00"), '
         print(len(toAddValidation[:numberToAdd]))
         addReportsQuery = addReportsQuery[:-2]+";"
         addingReports = client.query(addReportsQuery)
