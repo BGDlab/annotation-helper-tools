@@ -366,20 +366,20 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
     print("Number of ids for project", project_id, len(projectProcIds))
     
     # Get the proc_ord_ids from the grader table
-    qGradeTable = "SELECT proc_ord_id, grader_name from lab.grader_table_with_metadata where grade_category='Unique' and project like '%"+project_id+"%' ; "
+    qGradeTable = "SELECT proc_ord_id, grader_name, project from lab.grader_table_with_metadata where grade_category='Unique' and project like '%"+project_id+"%' ; "
     dfGradeTable = client.query(qGradeTable).to_dataframe()
     gradeTableProcIds = dfGradeTable['proc_ord_id'].values
     userProcIds = dfGradeTable[dfGradeTable['grader_name'] == name]['proc_ord_id'].values
     
     # Validation: are there any reports for the project that need to be validated that name hasn't graded?
-    toAddValidation = []
+    toAddValidation = {}
     for procId in projectProcIds: # for each proc_id in the project
         if procId in dfGradeTable['proc_ord_id'].values: # if the proc_id report was already graded
             graders = dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "grader_name"].values
             gradersStr = ", ".join(graders)
             # if the report was not graded by Coarse Text Search or the user and has not been graded N times
             if "Coarse Text Search" not in gradersStr and name not in gradersStr and len(graders) < numUsersForValidation:
-                toAddValidation.append(procId)  
+                toAddValidation[procId] = dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "project"].values[0]
             
     # projectReportsInTable = [procId for procId in projectProcIds if procId in dfGradeTable['proc_ord_id'].values and not dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "grader_name"].str.contains("Coarse Text Search").any() ]
     # Ignore procIds rated by User name
@@ -391,12 +391,14 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
     # Add validation reports - procIds already in the table
     if len(toAddValidation) > 0:
         addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES '
-        for procId in toAddValidation[:numberToAdd]:
-            row = dfProject[dfProject['proc_ord_id'] == procId]
-            addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
-            addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
-            addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
-            addReportsQuery += '", "arcus.procedure_order", "'+project_id+'", "0000-00-00"), '
+        count = 0
+        for procId, projId in toAddValidation:
+            if count < numberToAdd:
+                row = dfProject[dfProject['proc_ord_id'] == procId]
+                addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
+                addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
+                addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
+                addReportsQuery += '", "arcus.procedure_order", "'+projId+'", "0000-00-00"), '
         print(len(toAddValidation[:numberToAdd]))
         addReportsQuery = addReportsQuery[:-2]+";"
         addingReports = client.query(addReportsQuery)
