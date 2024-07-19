@@ -384,28 +384,26 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
     # projectReportsInTable = [procId for procId in projectProcIds if procId in dfGradeTable['proc_ord_id'].values and not dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "grader_name"].str.contains("Coarse Text Search").any() ]
     # Ignore procIds rated by User name
     print("Number of reports that need to be validated for "+project_id+":", len(toAddValidation))
-    # toAddValidation = [procId for procId in toAddValidation if procId not in userProcIds][:numberToAdd]
-    print("Number of validation reports added:", len(toAddValidation))
-    print(numberToAdd)
     
     # Add validation reports - procIds already in the table
+    countAdded = 0
     if len(toAddValidation) > 0:
         addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES '
-        count = 0
         for procId in toAddValidation:
-            if count < numberToAdd and procId not in userProcIds:
+            if countAdded < numberToAdd and procId not in userProcIds:
                 row = dfProject[dfProject['proc_ord_id'] == procId]
                 addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
                 addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
                 addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
                 addReportsQuery += '", "arcus.procedure_order", "'+toAddValidation[procId]+'", "0000-00-00"), '
-        print(len(toAddValidation[:numberToAdd]))
+                countAdded += 1
         addReportsQuery = addReportsQuery[:-2]+";"
         addingReports = client.query(addReportsQuery)
         addingReports.result()
 
     # New reports
-    toAddNew = [procId for procId in projectProcIds if procId not in dfGradeTable['proc_ord_id'].values][:(numberToAdd - len(toAddValidation))]
+    print("Number of validation reports added:", countAdded)
+    toAddNew = [procId for procId in projectProcIds if procId not in dfGradeTable['proc_ord_id'].values][:(numberToAdd - countAdded)]
     
     # Add new reports
     print("Number of new reports to grade:", len(toAddNew))
