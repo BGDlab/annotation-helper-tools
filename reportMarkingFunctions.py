@@ -392,13 +392,13 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
     if len(toAddValidation) > 0:
         addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES '
         count = 0
-        for procId, projId in toAddValidation:
+        for procId in toAddValidation:
             if count < numberToAdd:
                 row = dfProject[dfProject['proc_ord_id'] == procId]
                 addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
                 addReportsQuery += row['pat_id'].values[0]+'", '+str(row['proc_ord_age'].values[0])
                 addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+str(row['proc_ord_desc'].values[0].replace("'", "\'"))
-                addReportsQuery += '", "arcus.procedure_order", "'+projId+'", "0000-00-00"), '
+                addReportsQuery += '", "arcus.procedure_order", "'+toAddValidation[procId]+'", "0000-00-00"), '
         print(len(toAddValidation[:numberToAdd]))
         addReportsQuery = addReportsQuery[:-2]+";"
         addingReports = client.query(addReportsQuery)
