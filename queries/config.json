@@ -1,8 +1,4 @@
 {
-    "SLIP": {
-        "query": "./queries/slip_base.txt",
-        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
-    },
     "SLIP Neonates": {
         "query": "./queries/slip_neonates.txt",
         "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"

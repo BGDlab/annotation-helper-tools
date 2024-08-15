@@ -317,19 +317,10 @@ def markOneReportSQL(name, project, toHighlight = {}):
     updateJob = client.query(updateQuery)
     updateJob.result()
     print("Grade saved. Run the cell again to grade another report.")
-    
+
 ##
-# Get more proc_ord_id for which no reports have been rated for the specified user to grade
-# @param name A str containing the full name of the grader (to also be referenced in publications)
-def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
-    # Global var declaration
-    global numUsersForValidation
-    print("It is expected for this function to take several minutes to run. Your patience is appreciated.")
-    
-    # Initialize the client service
-    client = bigquery.Client()  
-    
-    # Load the config file
+#
+def load_cohort_config(project_id):
     fn = "./queries/config.json" ## write this file
     with open(fn, "r") as f:
         project_lookup = json.load(f)
@@ -357,7 +348,23 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
         q_tmp += "left join exclude_table on proc_ord.pat_id = exclude_table.pat_id where exclude_table.pat_id is null and"
         q_tmp += q_project.split("where")[1]
         q_project = q_tmp
-    ## ---
+        
+    return q_project
+
+
+##
+# Get more proc_ord_id for which no reports have been rated for the specified user to grade
+# @param name A str containing the full name of the grader (to also be referenced in publications)
+def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
+    # Global var declaration
+    global numUsersForValidation
+    print("It is expected for this function to take several minutes to run. Your patience is appreciated.")
+    
+    # Initialize the client service
+    client = bigquery.Client()  
+    
+    # Load the config file
+    q_project = load_cohort_config(project_id)
         
     # Run the query from the specified file -- should the query itself be passed to a dx filtering option?
     dfProject = client.query(q_project).to_dataframe()
@@ -429,7 +436,86 @@ def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
 
         # Inform the user
         print(len(df), "reports are in the queue for grader", name)
+
+##
+# Get more proc_ord_id for which no reports have been rated for the specified user to grade
+# @param name A str containing the full name of the grader (to also be referenced in publications)
+def getSecondLookReportsToGrade(name, numberToAdd=100):
+    # Global var declaration
+    global numUsersForValidation
+    print("It is expected for this function to take several minutes to run. Your patience is appreciated.")
     
+    # Initialize the client service
+    client = bigquery.Client()  
+   
+    # Get the proc_ord_ids from the grader table
+    qGradeTable = '''
+                    with CTE as (
+                      select
+                        distinct proc_ord_id,
+                        count(proc_ord_id) as graded_by_count
+                      from
+                        lab.grader_table_with_metadata
+                      group by
+                        proc_ord_id
+                    )
+                    select
+                      meta.pat_id,
+                      meta.proc_ord_id,
+                      meta.proc_name,
+                      meta.age_in_days,
+                      meta.proc_ord_year,
+                      meta.project,
+                      meta.grader_name,
+                      CTE.graded_by_count
+                    from
+                      CTE
+                      inner join lab.grader_table_with_metadata meta on CTE.proc_ord_id = meta.proc_ord_id
+                    where
+                      CTE.graded_by_count < 2
+                      and meta.grader_name not like "Coarse Text Search%"
+                      and meta.grader_name not like "'''
+    qGradeTable += name+'" ;'
+    dfGradeTable = client.query(qGradeTable).to_dataframe()
+    gradeTableProcIds = dfGradeTable['proc_ord_id'].values
+    userProcIds = dfGradeTable[dfGradeTable['grader_name'] == name]['proc_ord_id'].values
+    print(dfGradeTable.shape)
+
+    # How many reports need validation
+    toAddValidation = {}
+    for procId in dfGradeTable['proc_ord_id'].values: # if the proc_id report was already graded
+        graders = dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "grader_name"].values
+        gradersStr = ", ".join(graders)
+        # if the report was not graded by Coarse Text Search or the user and has not been graded N times
+        if "Coarse Text Search" not in gradersStr and name not in gradersStr and len(graders) < numUsersForValidation:
+            toAddValidation[procId] = dfGradeTable.loc[dfGradeTable['proc_ord_id'] == procId, "project"].values[0]
+
+    print("Number of reports that need to be validated:", len(toAddValidation))
+    
+    # Add validation reports - procIds already in the table
+    countAdded = 0
+    if len(toAddValidation) > 0:
+        addReportsQuery = 'insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES '
+        for procId in toAddValidation:
+            if countAdded < numberToAdd and procId not in userProcIds:
+                row = dfGradeTable[dfGradeTable['proc_ord_id'] == procId]
+                addReportsQuery += '("'+str(procId)+'", "'+name+'", 999, "Unique", "'
+                addReportsQuery += row['pat_id'].values[0]+'", '+str(row['age_in_days'].values[0])
+                addReportsQuery += ', '+str(row['proc_ord_year'].values[0])+', "'+row['proc_name'].values[0]
+                addReportsQuery += '", "arcus.procedure_order", "'+toAddValidation[procId]+'", "0000-00-00"), '
+                countAdded += 1
+        addReportsQuery = addReportsQuery[:-2]+";"
+        addingReports = client.query(addReportsQuery)
+        addingReports.result()
+
+    # New reports
+    print("Number of validation reports added:", countAdded)
+    qGetUserUnratedCount = 'select * from lab.grader_table_with_metadata where grade = 999 and grader_name like "%'+name+'%";'
+    df = client.query(qGetUserUnratedCount).to_dataframe()
+
+    # Inform the user
+    print(len(df), "reports are in the queue for grader", name)
+
     
 def welcomeUser(name):
     print("Welcome,", name)
