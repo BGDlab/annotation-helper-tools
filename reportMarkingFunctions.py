@@ -355,7 +355,11 @@ def load_cohort_config(project_id):
 ##
 # Get more proc_ord_id for which no reports have been rated for the specified user to grade
 # @param name A str containing the full name of the grader (to also be referenced in publications)
-def getMoreReportsToGrade(name, project_id="SLIP", numberToAdd=100):
+def getMoreReportsToGrade(name, project_id="SLIP Adolescents", numberToAdd=100):
+    if project_id == "SLIP":
+        print("SLIP is too broad of a cohort definition. Please modify your project_id to include the appropriate age group descriptor and then rerun this function.")
+        return -1
+        
     # Global var declaration
     global numUsersForValidation
     print("It is expected for this function to take several minutes to run. Your patience is appreciated.")

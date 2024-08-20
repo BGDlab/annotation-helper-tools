@@ -1,5 +1,10 @@
 {
     "gray": [
+        "No acute infarct or acute intracranial hemorrhage",
+        "No extra axial collection, mass effect, or midline shift",
+        "No parenchymal lesions or abnormal fluid collections are identified",
+        "There is no mass effect, midline shift, acute infarction, or abnormal enhancement",
+        "There is no intracranial mass lesion, mass effect, or midline shift",
         "No abnormal fluid collection is identified",
         "The cerebellar tonsils are well rounded and terminate just below the foramen magnum",
         "There is no mass, mass effect, or midline shift",
@@ -175,6 +180,10 @@
         "ajor intracranial vessels are patent"
     ],
     "green": [
+        "No obvious fetal brain abnormality",
+        "no evidence of stigmata of Chiari II malformation",
+        "brain demonstrates no stigmata of Chiari II malformation",
+        "No definite structural abnormality of fetal brain",
         "nremarkable brain",
         "nonspecific",
         "o imaging findings to suggest an acute intracranial abnormality",
