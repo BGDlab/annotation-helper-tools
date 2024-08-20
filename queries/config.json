@@ -24,5 +24,8 @@
     },
     "Pb Cohort": {
         "query": "./queries/pb_all.txt"
+    },
+    "Clinical Fetal": {
+        "query": "./queries/clinical_fetal.txt"
     }
 }
