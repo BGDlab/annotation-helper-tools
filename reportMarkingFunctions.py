@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import os
 import random
 from annotationHelperLib import *
 from dxFilterLibraryPreGrading import *
@@ -9,6 +10,32 @@ from collections import Counter
 from datetime import date
 
 numUsersForValidation = 2
+
+##
+# Back up lab.grader_table_with_metadata. Can be run on its own
+# or within another function
+def backup_grader_table():
+    client = bigquery.Client()
+    # Step 1: save the grader_table_with_metadata to a .csv
+    tmp_dir = os.path.expanduser("~/arcus/shared/.backups/")
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir)
+    tmp_csv = os.path.join(tmp_dir, "lab_grader_table_with_metadata.csv")
+    get_table_query = "select * from ldab.grader_table_with_metadata"
+    grader_table = client.query(get_table_query).to_dataframe()
+    grader_table.to_csv(tmp_csv, index=False)
+    
+    # Step 2: drop table lab.bak_grader_table_with_metadata
+    query_drop_table = "drop table lab.bak_grader_table_with_metadata"
+    job = client.query(query_drop_table)
+    job.result()
+    
+    # Step 3: create table lab.bak_grader_table_with_metadata
+    query_create_bak_table = "create table lab.bak_grader_table_with_metadata as select * from lab.grader_table_with_metadata"
+    job = client.query(query_create_bak_table)
+    job.result()
+    print("lab.grader_table_with_metadata backup successful")
+
  
 ##
 # Regrade skipped reports
@@ -16,7 +43,7 @@ numUsersForValidation = 2
 # @param project_name A string used to identify the project
 # @param grader A string of the grader's name (leave blank to review all flagged reports)
 # @param flag The level of "skip" to examine (-1 is group, -2 is clinician)
-def regradeSkippedReports(client, project_name="", grader="", flag=-1):   
+def regrade_skipped_reports(client, project_name="", grader="", flag=-1):   
     # Get the flagged reports
     if grader == "":
         q = "select * from lab.grader_table_with_metadata where grade = "+str(flag)
