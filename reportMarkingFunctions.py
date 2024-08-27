@@ -21,7 +21,7 @@ def backup_grader_table():
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
     tmp_csv = os.path.join(tmp_dir, "lab_grader_table_with_metadata.csv")
-    get_table_query = "select * from ldab.grader_table_with_metadata"
+    get_table_query = "select * from lab.grader_table_with_metadata"
     grader_table = client.query(get_table_query).to_dataframe()
     grader_table.to_csv(tmp_csv, index=False)
     
