@@ -1,5 +1,6 @@
 {
     "gray": [
+        "No abnormal cerebral parenchymal restricted diffusion",
         "No acute infarct or acute intracranial hemorrhage",
         "No extra axial collection, mass effect, or midline shift",
         "No parenchymal lesions or abnormal fluid collections are identified",
@@ -167,7 +168,8 @@
         "iddle ear cavities and mastoid air cells clear",
         "aranasal sinuses clear",
         "o intracranial mass lesion",
-        "o significant VENTRICULOMEGALY is present",
+        "o significant ventriculomegaly is present",
+        "o typical stigmata of Chiari II malformation",
         "o midline shift",
         "asilar cisterns are patent",
         "o abnormal extra axial fluid collections",
@@ -181,6 +183,7 @@
     ],
     "green": [
         "No obvious fetal brain abnormality",
+        "No evidence for structural abnormality of fetal brain",
         "no evidence of stigmata of Chiari II malformation",
         "brain demonstrates no stigmata of Chiari II malformation",
         "No definite structural abnormality of fetal brain",
@@ -294,6 +297,7 @@
         "ost operative",
         "ost-operative",
         "ostoperative",
+        "polymicrogyria",
         "lobectomy", 
         "amygdalohippocampectomy", 
         "hippocampectomy",
@@ -306,6 +310,7 @@
         "emispherotomy",
         "ventriculomegaly",
         "Ventriculomegaly",
+        "Multiple brain abnormalities",
         "This is a non-reportable study used for image storage. It has been automatically finalized and does not contain a result."
     ]
 }
