@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import random
+import json
 from annotationHelperLib import *
 from dxFilterLibraryPreGrading import *
 from IPython.display import clear_output
@@ -75,7 +76,9 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
         checkSkippedQuery = "select * from lab.skipped_reports where proc_ord_id = '"+str(row['proc_ord_id'])
         checkSkippedQuery += "' and grader_name = '"+row['grader_name']+"';"
         skippedDf = client.query(checkSkippedQuery).to_dataframe()
-        
+
+        print("Grader: ", row['grader_name'])
+                
         isSkipLogged = False
         if len(skippedDf) == 1:
             isSkipLogged = True
@@ -87,8 +90,15 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
         
         # Print the report
         procOrdId = row['proc_ord_id']
-        printReport(procOrdId, client)
-        print("Grader: ", row['grader_name'])
+
+        print("Projects:", row['project'])
+        print("Year of scan:", row['proc_ord_year'])
+        print("Age at scan:", np.round(row['age_in_days']/365.25, 2), "years")
+        procOrdId = row['proc_ord_id']
+        with open("phrases_to_highlight.json", "r") as f:
+            toHighlight = json.load(f)
+        printReport(procOrdId, client, toHighlight)
+        
         print()
         # ask for grade
         grade = getGrade(enable_md_flag=True)
