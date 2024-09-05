@@ -1,4 +1,5 @@
 select
+distinct
   proc_ord.pat_id,
   req.sex,
   req.race,
@@ -11,12 +12,17 @@ select
 from
   lab.requested_sessions_main_with_metadata req
   join arcus.procedure_order proc_ord on proc_ord.pat_id = req.pat_id
-where 
-  req.project like "%Clinical Imaging Genetics%" 
-  and req.grade_category = "Not Graded"
-order by 
+where
+  req.project like "%Clinical Imaging Genetics%"
+  and req.grade_category = "Not Graded" 
+  and proc_ord.proc_ord_desc not like "%SPECTROSCOPY%"
+  and proc_ord.proc_ord_desc not like "%OUTSIDE%"
+  and proc_ord.proc_ord_desc not like "%FUNCTL%"
+  and proc_ord.proc_ord_desc not like "%METABOLIC%"
+  and proc_ord.proc_ord_desc not like "%AUTOPSY%"
+  and (
+    proc_ord.proc_ord_desc like "%BRAIN%"
+    or proc_ord.proc_ord_desc like "%NEURO%"
+  )
+order by
   proc_ord.start_datetime desc;
-
-
-
-  
