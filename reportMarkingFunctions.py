@@ -323,6 +323,7 @@ def markOneReportSQL(name, project, toHighlight = {}):
     
     print("Year of scan:", df['proc_ord_year'].values[0])
     print("Age at scan:", np.round(df['age_in_days'].values[0]/365.25, 2), "years")
+    print("Project:", project)
     procOrdId = df['proc_ord_id'].values[0]
     printReport(procOrdId, client, toHighlight, source_table) # -- LOH
     grade = getGrade(enable_md_flag = False)
