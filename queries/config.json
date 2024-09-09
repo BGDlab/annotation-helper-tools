@@ -27,5 +27,8 @@
     },
     "Clinical Fetal": {
         "query": "./queries/clinical_fetal.txt"
+    },
+    "Indication Psychosis":  {
+        "query": "./queries/indication_psychosis.txt"
     }
 }
