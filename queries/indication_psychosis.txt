@@ -27,8 +27,6 @@ where
     or narr.narrative_text like "%Psychosis%"
     or narr.narrative_text like "%psychotic%"
     or narr.narrative_text like "%Psychotic%"
-    or narr.narrative_text like "%hallucination%"
-    or narr.narrative_text like "%Hallucination%"
     or narr.narrative_text like "%schizophrenia%"
     or narr.narrative_text like "%Schizophrenia%"
     or narr.narrative_text like "%schizoaffective%"
