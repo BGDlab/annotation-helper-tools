@@ -30,5 +30,8 @@
     },
     "Indication Psychosis":  {
         "query": "./queries/indication_psychosis.txt"
+    },
+    "22q11": {
+        "query": "./queries/22q_2020.txt"
     }
 }

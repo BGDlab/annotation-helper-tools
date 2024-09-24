@@ -154,6 +154,9 @@ def getReportsForUser(user, procIds):
 
 def printReportFromProcOrdId(procOrdId):
     client = bigquery.Client()
+
+    print("Proc ord id:", procOrdId)
+    print()
     
     # Get the report for that proc_ord_id from the primary report table
     getReportRow = 'SELECT * FROM arcus_2023_05_02.reports_annotations_master where proc_ord_id like "'+str(procOrdId)+'"'

@@ -1,5 +1,7 @@
 {
     "gray": [
+        "Findings do not meet criteria for CHIARI I deformity",
+        "The cerebellar tonsils are rounded in configuration and terminate at the level of the foramen magnum",
         "No abnormal cerebral parenchymal restricted diffusion",
         "No acute infarct or acute intracranial hemorrhage",
         "No extra axial collection, mass effect, or midline shift",
@@ -182,6 +184,10 @@
         "ajor intracranial vessels are patent"
     ],
     "green": [
+        "o fetal brain abnormality",
+        "o definite parenchymal signal alteration or intracranial hemorrhage",
+        "o parenchymal signal alteration or intracranial hemorrhage",
+        "No evidence of significant abnormal intracranial findings",
         "No obvious fetal brain abnormality",
         "No evidence for structural abnormality of fetal brain",
         "no evidence of stigmata of Chiari II malformation",
@@ -257,6 +263,7 @@
         "Orthodontic",
         "orthodontic",
         "leukemia",
+        "microcephaly",
         "AML",
         "periventricular leukomalacia",
         "PVL",
@@ -309,7 +316,9 @@
         "Gliosis",
         "emispherotomy",
         "ventriculomegaly",
+        "bsent corpus callosum",
         "tuberous sclerosis",
+        "Corpus callosum completely absent",
         "Ventriculomegaly",
         "Multiple brain abnormalities",
         "This is a non-reportable study used for image storage. It has been automatically finalized and does not contain a result."
