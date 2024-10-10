@@ -1,5 +1,5 @@
 select
-  distinct 
+distinct 
   proc_ord.pat_id,
   pat.sex,
   pat.race,
@@ -10,19 +10,20 @@ select
   proc_ord.proc_ord_age,
   proc_ord.proc_ord_desc
 from
-  arcus.procedure_order proc_ord
-  join arcus.patient pat on proc_ord.pat_id = pat.pat_id
+  arcus.patient pat
+  join arcus.procedure_order proc_ord on proc_ord.pat_id = pat.pat_id
+  join lab.high_priority_clin_imaging_genetics icd on icd.pat_id = proc_ord.pat_id
 where
-  proc_ord.proc_ord_age <= (365.25 * 5)
-  and proc_ord.proc_ord_age > (365.25 * 2)
+  icd.pat_id is not null
   and proc_ord.proc_ord_desc not like "%SPECTROSCOPY%"
   and proc_ord.proc_ord_desc not like "%OUTSIDE%"
   and proc_ord.proc_ord_desc not like "%FUNCTL%"
   and proc_ord.proc_ord_desc not like "%METABOLIC%"
   and proc_ord.proc_ord_desc not like "%AUTOPSY%"
-  and (proc_ord.proc_ord_desc like "%BRAIN%" or proc_ord.proc_ord_desc like "%NEURO%")
-  and proc_ord.proc_ord_year >= 2010
-order by 
-  case when pat.gestational_age_num is not null then 0 else 1 end asc,
-  proc_ord.start_datetime desc ;
-  
+  and proc_ord.proc_ord_desc not like "%OUTSIDE%"
+  and (
+    proc_ord.proc_ord_desc like "%BRAIN%"
+    or proc_ord.proc_ord_desc like "%NEURO%"
+  )
+order by
+  proc_ord.start_datetime desc;

@@ -1,4 +1,5 @@
 select
+  distinct
   pb.priority,
   proc_ord.pat_id,
   pat.sex,

@@ -22,6 +22,9 @@
     "Clinical Imaging Genetics": {
         "query": "./queries/clinical_imaging_genetics.txt"
     },
+    "VIP Clinical Imaging Genetics": {
+        "query": "./queries/clinical_imaging_genetics_vip.txt"
+    },
     "Pb Cohort": {
         "query": "./queries/pb_all.txt"
     },
