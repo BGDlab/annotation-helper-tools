@@ -1,14 +1,8 @@
 select
-distinct
+  distinct 
   proc_ord.pat_id,
-  req.sex,
-  req.race,
-  req.dob_year,
   proc_ord.proc_ord_id,
-  proc_ord.proc_ord_year,
-  proc_ord.start_datetime,
-  proc_ord.proc_ord_age,
-  proc_ord.proc_ord_desc
+  proc_ord.start_datetime
 from
   lab.requested_sessions_main_with_metadata req
   join arcus.procedure_order proc_ord on proc_ord.pat_id = req.pat_id

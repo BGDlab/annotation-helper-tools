@@ -1,15 +1,10 @@
 select
-  distinct
-  pb.priority,
+  distinct 
   proc_ord.pat_id,
-  pat.sex,
-  pat.race,
-  pat.dob_year,
   proc_ord.proc_ord_id,
-  proc_ord.proc_ord_year,
   proc_ord.start_datetime,
-  proc_ord.proc_ord_age,
-  proc_ord.proc_ord_desc,
+  pat.gestational_age_num,
+  pb.priority
 from
   arcus.procedure_order proc_ord
   join arcus.patient pat on proc_ord.pat_id = pat.pat_id

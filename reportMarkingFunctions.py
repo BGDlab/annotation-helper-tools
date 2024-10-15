@@ -15,16 +15,18 @@ project_table_name = "lab.proc_ord_projects"
 
 
 ##
-# Back up lab.grader_table_with_metadata. Can be run on its own
+# Back up grader table. Can be run on its own
 # or within another function
 def backup_grader_table():
+    global grader_table_name
     client = bigquery.Client()
     # Step 1: save the grader_table_with_metadata to a .csv
     tmp_dir = os.path.expanduser("~/arcus/shared/.backups/")
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
-    tmp_csv = os.path.join(tmp_dir, "lab_grader_table_with_metadata.csv")
-    get_table_query = "select * from lab.grader_table_with_metadata"
+    tmp_fn = grader_table_name.replace(".", "_")+".csv"
+    tmp_csv = os.path.join(tmp_dir, tmp_fn)
+    get_table_query = "select * from " + grader_table_name
     grader_table = client.query(get_table_query).to_dataframe()
     grader_table.to_csv(tmp_csv, index=False)
 
@@ -34,10 +36,11 @@ def backup_grader_table():
     job.result()
 
     # Step 3: create table lab.bak_grader_table_with_metadata
-    q_create_backup_table = "create table lab.bak_grader_table_with_metadata as select * from lab.grader_table_with_metadata"
+    grader_table_name_bak = grader_table_name.replace(".", ".bak")
+    q_create_backup_table = "create table "+grader_table_name+" as select * from "+grader_table_name
     job = client.query(q_create_backup_table)
     job.result()
-    print("lab.grader_table_with_metadata backup successful")
+    print(grader_table_name, " backup successful")
 
 
 ##
@@ -47,12 +50,13 @@ def backup_grader_table():
 # @param grader A string of the grader's name (leave blank to review all flagged reports)
 # @param flag The level of "skip" to examine (-1 is group, -2 is clinician)
 def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
+    global grader_table_name
     # Get the flagged reports
     if grader == "":
-        q = "select * from lab.grader_table_with_metadata where grade = " + str(flag)
+        q = "select * from "+grader_table_name+" where grade = " + str(flag)
     else:
         q = (
-            "select * from lab.grader_table_with_metadata where grade = "
+            "select * from "+grader_table_name+" where grade = "
             + str(flag)
             + " and grader_name = '"
             + grader
@@ -119,7 +123,7 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
             regrade_reason = get_reason("regrade")
 
             # Update the grader table with the new grade
-            q_update = "UPDATE lab.grader_table_with_metadata set grade = " + str(
+            q_update = "UPDATE "+grader_table_name+" set grade = " + str(
                 grade
             )
             q_update += ' WHERE proc_ord_id = "' + str(proc_ord_id) + '"'
@@ -168,10 +172,11 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
 # @param d A string representation of the date in YYYY-MM-DD format
 def get_grade_counts_since(d):
     client = bigquery.Client()
+    global grader_table_name
 
     # Query the table
     q = (
-        'select * from lab.grader_table_with_metadata where grade_date != "0000-00-00" and cast(grade_date as date) >= cast("'
+        'select * from '+grader_table_name+' where grade_date != "0000-00-00" and cast(grade_date as date) >= cast("'
         + d
         + '" as date);'
     )
@@ -384,10 +389,11 @@ def mark_selfeval_report_sql(name, to_highlight={}):
 def mark_one_report_sql(name, project, to_highlight={}):
     # Initialize the client service
     client = bigquery.Client()
+    global grader_table_name
 
     # Get a row from the grader table for the specified rater that has not been graded yet - start with Reliability
     q_get_single_row = (
-        'SELECT * FROM lab.grader_table_with_metadata grader inner join arcus_2023_04_05.procedure_order_narrative narr on narr.proc_ord_id = grader.proc_ord_id WHERE grader_name = "'
+        'SELECT * FROM '+grader_table_name+' grader inner join arcus_2023_04_05.procedure_order_narrative narr on narr.proc_ord_id = grader.proc_ord_id WHERE grader_name = "'
         + name
         + '" and grade = 999 and grade_category = "Reliability" LIMIT 1'
     )
@@ -397,7 +403,7 @@ def mark_one_report_sql(name, project, to_highlight={}):
     if len(df) == 0:
         # Get a row from the grader table for the specified rater that has not been graded yet - if no Reliability, then Unique
         q_get_single_row = (
-            'SELECT * FROM lab.grader_table_with_metadata WHERE grader_name = "'
+            'SELECT * FROM '+grader_table_name+' WHERE grader_name = "'
             + name
             + '" and grade = 999 and grade_category = "Unique" LIMIT 1'
         )
@@ -448,7 +454,7 @@ def mark_one_report_sql(name, project, to_highlight={}):
 
     # LOH - do more changes need to be made here to change the metadata in the table? I think no but ...
     # Update the grader table with the new grade
-    q_update = "UPDATE lab.grader_table_with_metadata set grade = " + str(grade)
+    q_update = "UPDATE "+grader_table_name+" set grade = " + str(grade)
     today = date.today().strftime("%Y-%m-%d")
     q_update += ', grade_date = "' + today + '"'
     q_update += ' WHERE proc_ord_id = "' + str(df["proc_ord_id"].values[0]) + '"'
@@ -505,6 +511,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
 
     # Global var declaration
     global num_validation_graders
+    global grader_table_name
     print(
         "It is expected for this function to take several minutes to run. Your patience is appreciated."
     )
@@ -523,7 +530,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
 
     # Get the proc_ord_ids from the grader table
     q_grade_table = (
-        "SELECT proc_ord_id, grader_name, project from lab.grader_table_with_metadata where grade_category='Unique' and project like '%"
+        "SELECT proc_ord_id, grader_name, project from "+grader_table_name+" where grade_category='Unique' and project like '%"
         + project_id
         + "%' ; "
     )
@@ -562,7 +569,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
     # Add validation reports - proc_ids already in the table
     count_added = 0
     if len(to_add_validation) > 0:
-        q_add_reports = "insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES "
+        q_add_reports = "insert into "+grader_table_name+" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES "
         for proc_id in to_add_validation:
             if count_added < num_to_add and proc_id not in user_proc_ids:
                 row = df_project[df_project["proc_ord_id"] == proc_id]
@@ -599,7 +606,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
     # Add new reports
     print("Number of new reports to grade:", len(to_add_new))
     if len(to_add_new) > 0:
-        q_add_reports = "insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES "
+        q_add_reports = "insert into "+grader_table_name+" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES "
         for proc_id in to_add_new:
             row = df_project[df_project["proc_ord_id"] == proc_id]
             q_add_reports += (
@@ -628,7 +635,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
         )
     else:
         get_user_unrated_count = (
-            'SELECT * FROM lab.grader_table_with_metadata WHERE grader_name like "'
+            'SELECT * FROM '+grader_table_name+' WHERE grader_name like "'
             + name
             + '" and grade = 999'
         )
@@ -645,6 +652,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
 def get_second_look_reports_to_grade(name, num_to_add=100):
     # Global var declaration
     global num_validation_graders
+    global grader_table_name
     print(
         "It is expected for this function to take several minutes to run. Your patience is appreciated."
     )
@@ -658,9 +666,7 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
                       select
                         distinct proc_ord_id,
                         count(proc_ord_id) as graded_by_count
-                      from
-                        lab.grader_table_with_metadata
-                      group by
+                      from ''' + grader_table_name + ''' group by
                         proc_ord_id
                     )
                     select
@@ -669,12 +675,11 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
                       meta.proc_name,
                       meta.age_in_days,
                       meta.proc_ord_year,
-                      meta.project,
                       meta.grader_name,
                       CTE.graded_by_count
                     from
                       CTE
-                      inner join lab.grader_table_with_metadata meta on CTE.proc_ord_id = meta.proc_ord_id
+                      inner join '''+grader_table_name+''' meta on CTE.proc_ord_id = meta.proc_ord_id
                     where
                       CTE.graded_by_count < 2
                       and meta.grader_name not like "Coarse Text Search%"
@@ -711,7 +716,7 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
     # Add validation reports - proc_ids already in the table
     count_added = 0
     if len(to_add_validation) > 0:
-        q_add_reports = "insert into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES "
+        q_add_reports = "insert into "+grader_table_name+" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, grade_date) VALUES "
         for proc_id in to_add_validation:
             if count_added < num_to_add and proc_id not in user_proc_ids:
                 row = df_grade_table[df_grade_table["proc_ord_id"] == proc_id]
@@ -740,7 +745,7 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
     # New reports
     print("Number of validation reports added:", count_added)
     q_get_user_unrated_count = (
-        'select * from lab.grader_table_with_metadata where grade = 999 and grader_name like "%'
+        'select * from '+grader_table_name+' where grade = 999 and grader_name like "%'
         + name
         + '%";'
     )
@@ -752,6 +757,7 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
 
 def welcome_user(name):
     print("Welcome,", name)
+    global grader_table_name
 
     client = bigquery.Client()
 
@@ -775,7 +781,7 @@ def welcome_user(name):
         return
 
     q_reliability = (
-        'select * from lab.grader_table_with_metadata where grade_category = "Reliability" and grader_name like"'
+        'select * from '+grader_table_name+' where grade_category = "Reliability" and grader_name like"'
         + name
         + '"'
     )
@@ -791,7 +797,7 @@ def welcome_user(name):
 
     else:
         q_get_queued_count = (
-            'select * from lab.grader_table_with_metadata where grader_name like "'
+            'select * from '+grader_table_name+' where grader_name like "'
         )
         q_get_queued_count += name + '" and grade = 999'
 
@@ -812,10 +818,11 @@ def welcome_user(name):
 
 def add_reliability_reports(name):
     client = bigquery.Client()
+    global grader_table_name
 
     # Get the grader table
     q_get_grader_table = (
-        "SELECT * from lab.grader_table_with_metadata where grader_name = '"
+        "SELECT * from "+grader_table_name+" where grader_name = '"
         + name
         + "' and grade_category = 'Reliability';"
     )
@@ -824,7 +831,7 @@ def add_reliability_reports(name):
     df_reliability = pd.read_csv("~/arcus/shared/reliability_report_info.csv")
     add_reports = False
 
-    q_insert_report = "INSERT into lab.grader_table_with_metadata (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES"
+    q_insert_report = "INSERT into "+grader_table_name+" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, grade_date) VALUES"
 
     # print(df_grader['proc_ord_id'].values)
 
@@ -851,8 +858,6 @@ def add_reliability_reports(name):
                 row["proc_name"]
                 + "', '"
                 + row["report_origin_table"]
-                + "', '"
-                + row["project"]
             )
             q_insert_report += "', '0000-00-00'),"
             add_reports = True
@@ -919,11 +924,12 @@ def check_reliability_ratings(df_grader):
 def release_reports(grader_name, reports_list):
     # Initialize the client
     client = bigquery.Client()
+    global grader_table_name
 
     # For each report
     for proc_id in reports_list:
         # Update the grader table with the new grade
-        q_update = "UPDATE lab.grader_table_with_metadata set grade = 999,"
+        q_update = "UPDATE "+grader_table_name+" set grade = 999,"
         q_update += ' grade_date="0000-00-00"'
         q_update += ' WHERE proc_ord_id = "' + str(proc_id) + '"'
         q_update += ' and grader_name = "' + grader_name + '"'
@@ -945,8 +951,9 @@ def release_reports(grader_name, reports_list):
 # Check
 def backup_reliability_grades(user):
     client = bigquery.Client()
+    global grader_table_name
 
-    q = "select * from lab.grader_table_with_metadata where grader_name = '" + user
+    q = "select * from "+grader_table_name+" where grader_name = '" + user
     q += "' and grade_category = 'Reliability'"
     df_primary = client.query(q).to_dataframe()
 
@@ -1181,8 +1188,9 @@ def get_grade(enable_md_flag=False):
 
 def get_grader_status_report(name):
     client = bigquery.Client()
+    global grader_table_name
 
-    query = "select * from lab.grader_table_with_metadata where "
+    query = "select * from "+grader_table_name+" where "
     query += "grader_name = '" + name + "';"
     print(query)
     df = client.query(query).to_dataframe()

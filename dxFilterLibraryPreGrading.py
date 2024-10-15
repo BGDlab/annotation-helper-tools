@@ -227,7 +227,7 @@ def convert_exclude_dx_csv_to_sql(fn):
         q += "phecode = " + str(dx) + " or "
 
     # After iterating through the rows, remove the last "or "
-    q = q[:-3] + ")"
+    q = q[:-3] + ") "
 
     # Return the filter query
     return q
