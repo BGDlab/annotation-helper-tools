@@ -1,6 +1,7 @@
 from reportMarkingFunctions import *
 from datetime import date, timedelta
 
+
 def main():
     # Get today's date
     today = date.today()
@@ -12,11 +13,12 @@ def main():
 
     # Print the interaction report for the last week
     print("Since", lastWeek)
-    getGradeCountsSinceDate(lastWeek)
+    get_grade_counts_since(lastWeek)
 
     # Print the interaction report for the last 4 weeks
     print("\nSince", last4Weeks)
-    getGradeCountsSinceDate(last4Weeks)
+    get_grade_counts_since(last4Weeks)
+
 
 if __name__ == "__main__":
     main()
