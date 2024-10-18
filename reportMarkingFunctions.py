@@ -8,6 +8,7 @@ from dxFilterLibraryPreGrading import *
 from IPython.display import clear_output
 from google.cloud import bigquery  # SQL table interface on Arcus
 from datetime import date
+from projectTableFunctions import *
 
 num_validation_graders = 2
 grader_table_name = "lab.test_grader_table_with_metadata"
@@ -31,13 +32,13 @@ def backup_grader_table():
     grader_table.to_csv(tmp_csv, index=False)
 
     # Step 2: drop table lab.bak_grader_table_with_metadata
-    q_drop_table = "drop table lab.bak_grader_table_with_metadata"
+    grader_table_name_bak = grader_table_name.replace(".", ".bak_")
+    q_drop_table = "drop table "+grader_table_name_bak
     job = client.query(q_drop_table)
     job.result()
 
     # Step 3: create table lab.bak_grader_table_with_metadata
-    grader_table_name_bak = grader_table_name.replace(".", ".bak")
-    q_create_backup_table = "create table "+grader_table_name+" as select * from "+grader_table_name
+    q_create_backup_table = "create table "+grader_table_name_bak+" as select * from "+grader_table_name
     job = client.query(q_create_backup_table)
     job.result()
     print(grader_table_name, " backup successful")
@@ -52,23 +53,19 @@ def backup_grader_table():
 def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
     global grader_table_name
     # Get the flagged reports
-    if grader == "":
-        q = "select * from "+grader_table_name+" where grade = " + str(flag)
-    else:
-        q = (
-            "select * from "+grader_table_name+" where grade = "
-            + str(flag)
-            + " and grader_name = '"
-            + grader
-            + "'"
-        )
-
+    # Start the query
+    q = "select distinct * from "+grader_table_name
+    # If the user wants to incorporate the project
     if project_name != "":
-        print("Examining the skipped reports for", project_name)
-        q += " and project like '%" + project_name + "%'"
+        q += ' reports join lab.proc_ord_projects project on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) where projects.project = "'+project_name+'" '
+
+    q += " where grade = " + str(flag)
+    # If the grader i
+    if grader != "":
+        q += " and grader_name = '" + grader + "'"
 
     q += ";"
-    flagged_reports = client.query(q).to_dataframe()
+    flagged_reports = client.query(q).to_dataframe() #LOH
 
     if flagged_reports.shape[0] == 0:
         print("There are currently no reports with the grade of", flag)
@@ -106,7 +103,7 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
         # Print the report
         proc_ord_id = row["proc_ord_id"]
 
-        print("Projects:", row["project"])
+        # print("Projects:", row["project"]) # -- if useful, add back in for graders
         print("Year of scan:", row["proc_ord_year"])
         print("Age at scan:", np.round(row["age_in_days"] / 365.25, 2), "years")
         proc_ord_id = row["proc_ord_id"]
@@ -391,7 +388,8 @@ def mark_one_report_sql(name, project, to_highlight={}):
     client = bigquery.Client()
     global grader_table_name
 
-    # Get a row from the grader table for the specified rater that has not been graded yet - start with Reliability
+    # Get a row from the grader table for the specified rater that has not been graded yet
+    # If there's any reliability reports, start there
     q_get_single_row = (
         'SELECT * FROM '+grader_table_name+' grader inner join arcus_2023_04_05.procedure_order_narrative narr on narr.proc_ord_id = grader.proc_ord_id WHERE grader_name = "'
         + name
@@ -401,12 +399,16 @@ def mark_one_report_sql(name, project, to_highlight={}):
     source_table = "arcus_2023_04_05.procedure_order_narrative"
 
     if len(df) == 0:
-        # Get a row from the grader table for the specified rater that has not been graded yet - if no Reliability, then Unique
+        # If no reports need Reliability, then get Unique reports
         q_get_single_row = (
-            'SELECT * FROM '+grader_table_name+' WHERE grader_name = "'
+            'SELECT * FROM '+grader_table_name
+            + ' reports join lab.proc_ord_projects projects on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) '
+            + ' WHERE grader_name = "'
             + name
-            + '" and grade = 999 and grade_category = "Unique" LIMIT 1'
+            + '" and grade = 999 and grade_category = "Unique"'
+            + ' LIMIT 1'
         )
+        print(q_get_single_row)
         df = client.query(q_get_single_row).to_dataframe()
         source_table = "arcus.procedure_order_narrative"
 
@@ -420,12 +422,12 @@ def mark_one_report_sql(name, project, to_highlight={}):
 
     print("Year of scan:", df["proc_ord_year"].values[0])
     print("Age at scan:", np.round(df["age_in_days"].values[0] / 365.25, 2), "years")
-    print("Project:", project)
+    # print("Project:", project) 
     proc_ord_id = df["proc_ord_id"].values[0]
     print_report(proc_ord_id, client, to_highlight, source_table)  # -- LOH
     grade = get_grade(enable_md_flag=False)
 
-    # write the case to handle the skipped reports #TODO - make sure that a regular user can't mark -2 on an original report
+    # write the case to handle the skipped reports 
     if grade == -1:
         # Ask the user for a reason
         skip_reason = get_reason("skip")
@@ -512,126 +514,81 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
     # Global var declaration
     global num_validation_graders
     global grader_table_name
-    print(
-        "It is expected for this function to take several minutes to run. Your patience is appreciated."
-    )
+    print("It is expected for this function to take several minutes to run. Your patience is appreciated.")
 
     # Initialize the client service
     client = bigquery.Client()
 
-    # Load the config file
-    q_project = load_cohort_config(project_id)
-
-    # Run the query from the specified file -- should the query itself be passed to a dx filtering option?
-    df_project = client.query(q_project).to_dataframe()
-    # Now we have the ids of the reports we want to grade for Project project
-    project_proc_ids = df_project["proc_ord_id"].values
-    print("Number of ids for project", project_id, len(project_proc_ids))
+    # Get the number of reports for a cohort
+    get_project_report_stats(project_id)
 
     # Get the proc_ord_ids from the grader table
-    q_grade_table = (
-        "SELECT proc_ord_id, grader_name, project from "+grader_table_name+" where grade_category='Unique' and project like '%"
-        + project_id
-        + "%' ; "
-    )
-    df_grade_table = client.query(q_grade_table).to_dataframe()
-    table_proc_ids = df_grade_table["proc_ord_id"].values
-    user_proc_ids = df_grade_table[df_grade_table["grader_name"] == name][
-        "proc_ord_id"
-    ].values
-
-    # Validation: are there any reports for the project that need to be validated that name hasn't graded?
-    to_add_validation = {}
-    for proc_id in project_proc_ids:  # for each proc_id in the project
-        if (
-            proc_id in df_grade_table["proc_ord_id"].values
-        ):  # if the proc_id report was already graded
-            graders = df_grade_table.loc[
-                df_grade_table["proc_ord_id"] == proc_id, "grader_name"
-            ].values
-            graders_str = ", ".join(graders)
-            # if the report was not graded by Coarse Text Search or the user and has not been graded N times
-            if (
-                "Coarse Text Search" not in graders_str
-                and name not in graders_str
-                and len(graders) < num_validation_graders
-            ):
-                to_add_validation[proc_id] = df_grade_table.loc[
-                    df_grade_table["proc_ord_id"] == proc_id, "project"
-                ].values[0]
-
-    # Ignore proc_ids rated by User name
-    print(
-        "Number of reports that need to be validated for " + project_id + ":",
-        len(to_add_validation),
-    )
-
+    q_get_validation_reports = '''with CTE as (
+          select
+            count(proc_ord_id) as counter,
+            proc_ord_id
+          from
+            lab.test_grader_table_with_metadata
+          group by proc_ord_id
+        )
+        select
+        distinct 
+          CTE.counter,
+          grader.proc_ord_id,
+          grader.grader_name
+        from '''+grader_table_name+''' grader
+          join lab.proc_ord_projects projects on (
+            grader.proc_ord_id = projects.proc_ord_id
+            and grader.pat_id = projects.pat_id
+          )
+          join CTE on (
+            grader.proc_ord_id = CTE.proc_ord_id
+          )
+        where
+          projects.project = "'''+project_id+'''"
+          and grader.grader_name != "'''+name+'''"  
+          and CTE.counter < '''+str(num_validation_graders)+'''
+          and grader.grader_name not like "Coarse Text Search%"
+          and grade_category = "Unique"
+        limit '''+str(num_to_add)+''';'''
+    
+    df_validation_reports = client.query(q_get_validation_reports).to_dataframe()
     # Add validation reports - proc_ids already in the table
-    count_added = 0
+    to_add_validation = list(set(df_validation_reports['proc_ord_id'].values))
     if len(to_add_validation) > 0:
-        q_add_reports = "insert into "+grader_table_name+" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES "
-        for proc_id in to_add_validation:
-            if count_added < num_to_add and proc_id not in user_proc_ids:
-                row = df_project[df_project["proc_ord_id"] == proc_id]
-                q_add_reports += (
-                    '("' + str(proc_id) + '", "' + name + '", 999, "Unique", "'
-                )
-                q_add_reports += (
-                    row["pat_id"].values[0] + '", ' + str(row["proc_ord_age"].values[0])
-                )
-                q_add_reports += (
-                    ", "
-                    + str(row["proc_ord_year"].values[0])
-                    + ', "'
-                    + str(row["proc_ord_desc"].values[0].replace("'", "'"))
-                )
-                q_add_reports += (
-                    '", "arcus.procedure_order", "'
-                    + to_add_validation[proc_id]
-                    + '", "0000-00-00"), '
-                )
-                count_added += 1
-        q_add_reports = q_add_reports[:-2] + ";"
-        j_add_reports = client.query(q_add_reports)
-        j_add_reports.result()
+        add_reports_for_grader(to_add_validation, name, project_id)
 
     # New reports
-    print("Number of validation reports added:", count_added)
-    to_add_new = [
-        proc_id
-        for proc_id in project_proc_ids
-        if proc_id not in df_grade_table["proc_ord_id"].values
-    ][: (num_to_add - count_added)]
-
+    print("Number of validation reports added:", len(to_add_validation))
+    
     # Add new reports
-    print("Number of new reports to grade:", len(to_add_new))
+    q_get_new_reports = '''select
+          projects.*,
+          proc.start_datetime
+        from 
+          lab.proc_ord_projects projects
+          join arcus.procedure_order proc on proc.proc_ord_id = projects.proc_ord_id
+        where
+          project = "'''+project_id+'''"
+          and projects.proc_ord_id not in (
+            select
+              grader.proc_ord_id
+            from '''+ grader_table_name + ''' grader
+          )
+        order by proc.start_datetime
+        limit '''+str(num_to_add-len(to_add_validation))+''';'''
+
+    df_new_reports = client.query(q_get_new_reports).to_dataframe()
+    to_add_new = list(set(df_new_reports['proc_ord_id'].values))
     if len(to_add_new) > 0:
-        q_add_reports = "insert into "+grader_table_name+" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, project, grade_date) VALUES "
-        for proc_id in to_add_new:
-            row = df_project[df_project["proc_ord_id"] == proc_id]
-            q_add_reports += (
-                '("' + str(proc_id) + '", "' + name + '", 999, "Unique", "'
-            )
-            q_add_reports += (
-                row["pat_id"].values[0] + '", ' + str(row["proc_ord_age"].values[0])
-            )
-            q_add_reports += (
-                ", "
-                + str(row["proc_ord_year"].values[0])
-                + ', "'
-                + str(row["proc_ord_desc"].values[0].replace("'", "'"))
-            )
-            q_add_reports += (
-                '", "arcus.procedure_order", "' + project_id + '", "0000-00-00"), '
-            )
-        q_add_reports = q_add_reports[:-2] + ";"
-        j_add_reports = client.query(q_add_reports)
-        j_add_reports.result()
+        add_reports_for_grader(to_add_new, name, project_id)
+   
+    print("Number of new reports to grade:", len(to_add_new))
 
     # Check: how many reports were added for the user?
     if (len(to_add_validation) + len(to_add_new)) == 0:
         print(
-            "There are no reports returned by the specified query that have yet to be either graded or validated."
+            "There are no reports for this project that have yet to be either graded or validated."
         )
     else:
         get_user_unrated_count = (
@@ -644,6 +601,46 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
 
         # Inform the user
         print(len(df), "reports are in the queue for grader", name)
+
+
+def add_reports_for_grader(proc_ord_ids, grader_name, project_id=""):
+    client = bigquery.Client()
+    global grader_table_name
+    
+    # Get the column names from the table
+    q_get_cols = "select * from "+grader_table_name+" limit 1;"
+    df_get_cols = client.query(q_get_cols).to_dataframe()
+    cols_str = " ("+", ".join(list(df_get_cols))+") "
+    
+    # Convert the list of proc_ord_ids to a SQL string
+    procs_str = ' ("'+'", "'.join(proc_ord_ids)+'") '
+    
+    # Set up the query
+    q_insert = '''insert into '''+grader_table_name+cols_str+'''
+        select
+          distinct 
+          proc_ord.proc_ord_id, "'''+grader_name+'''" as grader_name,
+          999 as grade,
+          "Unique" as grade_category,
+          proc_ord.pat_id,
+          proc_ord.proc_ord_age as age_in_days,
+          proc_ord.proc_ord_year,
+          proc_ord.proc_ord_desc as proc_name,
+          "arcus.procedure_order" as report_origin_table, '''
+    if "project" in cols_str:
+        q_insert += '"'+project_id+'" as project, '
+    q_insert += '''"0000-00-00" as grade_date 
+        from
+          arcus.procedure_order proc_ord
+          join arcus.patient pat on proc_ord.pat_id = pat.pat_id
+        where
+          proc_ord.proc_ord_id in '''+procs_str+'''
+        order by 
+          proc_ord.proc_ord_year desc;'''
+    print(q_insert)
+    j_insert = client.query(q_insert)
+    j_insert.result()
+
 
 
 ##
@@ -661,89 +658,43 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
     client = bigquery.Client()
 
     # Get the proc_ord_ids from the grader table
-    q_grade_table = '''
-                    with CTE as (
-                      select
-                        distinct proc_ord_id,
-                        count(proc_ord_id) as graded_by_count
-                      from ''' + grader_table_name + ''' group by
-                        proc_ord_id
-                    )
-                    select
-                      meta.pat_id,
-                      meta.proc_ord_id,
-                      meta.proc_name,
-                      meta.age_in_days,
-                      meta.proc_ord_year,
-                      meta.grader_name,
-                      CTE.graded_by_count
-                    from
-                      CTE
-                      inner join '''+grader_table_name+''' meta on CTE.proc_ord_id = meta.proc_ord_id
-                    where
-                      CTE.graded_by_count < 2
-                      and meta.grader_name not like "Coarse Text Search%"
-                      and meta.grader_name not like "'''
-    q_grade_table += name + '" ;'
+    q_grade_table = '''with CTE as (
+          select
+            count(proc_ord_id) as counter,
+            proc_ord_id
+          from
+            lab.test_grader_table_with_metadata
+          group by proc_ord_id
+        )
+        select
+        distinct 
+          CTE.counter,
+          grader.proc_ord_id,
+          grader.grader_name
+        from '''+grader_table_name+''' grader
+          join lab.proc_ord_projects projects on (
+            grader.proc_ord_id = projects.proc_ord_id
+            and grader.pat_id = projects.pat_id
+          )
+          join CTE on (
+            grader.proc_ord_id = CTE.proc_ord_id
+          )
+        where
+          grader.grader_name != "'''+name+'''"  
+          and CTE.counter < '''+str(num_validation_graders)+'''
+          and grader.grader_name not like "Coarse Text Search%"
+          and grade_category = "Unique"
+        limit '''+str(num_to_add)+''';'''
     df_grade_table = client.query(q_grade_table).to_dataframe()
-    table_proc_ids = df_grade_table["proc_ord_id"].values
-    user_proc_ids = df_grade_table[df_grade_table["grader_name"] == name][
-        "proc_ord_id"
-    ].values
+    
+    to_validate_ids = df_grade_table["proc_ord_id"].values
     print(df_grade_table.shape)
 
-    # How many reports need validation
-    to_add_validation = {}
-    for proc_id in df_grade_table[
-        "proc_ord_id"
-    ].values:  # if the proc_id report was already graded
-        graders = df_grade_table.loc[
-            df_grade_table["proc_ord_id"] == proc_id, "grader_name"
-        ].values
-        graders_str = ", ".join(graders)
-        # if the report was not graded by Coarse Text Search or the user and has not been graded N times
-        if (
-            "Coarse Text Search" not in graders_str
-            and name not in graders_str
-            and len(graders) < num_validation_graders
-        ):
-            to_add_validation[proc_id] = df_grade_table.loc[
-                df_grade_table["proc_ord_id"] == proc_id, "project"
-            ].values[0]
-
-    print("Number of reports that need to be validated:", len(to_add_validation))
-
     # Add validation reports - proc_ids already in the table
-    count_added = 0
-    if len(to_add_validation) > 0:
-        q_add_reports = "insert into "+grader_table_name+" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, grade_date) VALUES "
-        for proc_id in to_add_validation:
-            if count_added < num_to_add and proc_id not in user_proc_ids:
-                row = df_grade_table[df_grade_table["proc_ord_id"] == proc_id]
-                q_add_reports += (
-                    '("' + str(proc_id) + '", "' + name + '", 999, "Unique", "'
-                )
-                q_add_reports += (
-                    row["pat_id"].values[0] + '", ' + str(row["age_in_days"].values[0])
-                )
-                q_add_reports += (
-                    ", "
-                    + str(row["proc_ord_year"].values[0])
-                    + ', "'
-                    + row["proc_name"].values[0]
-                )
-                q_add_reports += (
-                    '", "arcus.procedure_order", "'
-                    + to_add_validation[proc_id]
-                    + '", "0000-00-00"), '
-                )
-                count_added += 1
-        q_add_reports = q_add_reports[:-2] + ";"
-        j_add_reports = client.query(q_add_reports)
-        j_add_reports.result()
+    if len(to_validate_ids) > 0:
+        add_reports_for_grader(to_validate_ids, name) 
 
     # New reports
-    print("Number of validation reports added:", count_added)
     q_get_user_unrated_count = (
         'select * from '+grader_table_name+' where grade = 999 and grader_name like "%'
         + name

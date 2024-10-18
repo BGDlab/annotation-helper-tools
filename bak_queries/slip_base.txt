@@ -1,0 +1,23 @@
+select
+  proc_ord.pat_id,
+  pat.sex,
+  pat.race,
+  pat.dob_year,
+  proc_ord.proc_ord_id,
+  proc_ord.proc_ord_year,
+  proc_ord.start_datetime,
+  proc_ord.proc_ord_age,
+  proc_ord.proc_ord_desc
+from
+  arcus.procedure_order proc_ord
+  join arcus.patient pat on proc_ord.pat_id = pat.pat_id
+where
+  proc_ord.proc_ord_desc not like "%SPECTROSCOPY%"
+  and proc_ord.proc_ord_desc not like "%OUTSIDE%"
+  and proc_ord.proc_ord_desc not like "%FUNCTL%"
+  and proc_ord.proc_ord_desc not like "%METABOLIC%"
+  and proc_ord.proc_ord_desc not like "%AUTOPSY%"
+  and (proc_ord.proc_ord_desc like "%BRAIN%" or proc_ord.proc_ord_desc like "%NEURO%")
+order by 
+  proc_ord.start_datetime desc;
+  
