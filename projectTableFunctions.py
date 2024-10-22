@@ -7,6 +7,11 @@ from google.cloud import bigquery # SQL table interface on Arcus
 from dxFilterLibraryPreGrading import *
 from reportMarkingFunctions import *
 import json
+import matplotlib.pyplot as plt
+
+
+req_table = "lab.test_requested_sessions_main_with_metadata"
+grader_table = "lab.test_grader_table_with_metadata"
 
 
 def add_reports_to_project(cohort):
@@ -58,3 +63,97 @@ def get_project_report_stats(cohort):
     print("Graded 2:", len(df_graded_reports[df_graded_reports['grade'] == 2]))
     print("Queued:", len(df_graded_reports[df_graded_reports['grade'] == 999]))
     print("Skipped:", len(df_graded_reports[df_graded_reports['grade'] < 0]))
+
+
+## Main function for plotting the age at scan for any cohort
+# @param cohort str
+# @param color_by list
+# @param only_requested boolean
+def plot_age_at_scan(cohort, color_by=[], only_requested=False):
+    df_cohort = get_unique_report_data(cohort, only_requested)
+
+    title = "Histogram of Age At Scan for Distinct "+cohort
+    # If only requested
+    if only_requested:
+        title += " (Requested Only, N = "+str(len(df_cohort))+")"
+    else:
+        title += " (All Graded, N = "+str(len(df_cohort))+")"
+
+    # Set up the figure
+    fig, ax = plt.subplots(1, 1, tight_layout=True)
+    
+    # Check the color_by arg
+    if "sex" in color_by and "grade" in color_by:
+        # Add a column to the table with the combined sex/grade info
+        print("Histograms for both sex and grade not yet available")
+        return
+    elif "grade" in color_by:
+        grades = list(set(df_cohort['avg_grade_group'].values))
+        _, bin_edges = np.histogram(df_cohort['age_in_years'], 50)
+        for grade in sorted(grades):
+            ax.hist(df_cohort[df_cohort['avg_grade_group'] == grade]['age_in_years'], 
+                              bin_edges, histtype='bar', 
+                              stacked=True, label=str(grade))
+        plt.legend()
+
+    elif "sex" in color_by:
+        sexes = list(set(df_cohort['sex'].values))
+        _, bin_edges = np.histogram(df_cohort['age_in_years'], 50)
+        for sex in sorted(sexes):
+            ax.hist(df_cohort[df_cohort['sex'] == sex]['age_in_years'], 
+                              bin_edges, histtype='bar', 
+                              stacked=True, label=str(sex))
+        plt.legend()
+        
+    else:
+        ax.hist(df_cohort['age_in_years'], bins=50)
+        
+    plt.title(title)
+    plt.xlabel("Age at Scan (years)")
+    plt.ylabel("Count")
+    plt.grid(visible=True)
+    plt.show()
+
+# A helper function to get the subset of unique graded reports for a given cohort
+def get_unique_report_data(cohort, only_requested):
+    # Set up the client
+    client = bigquery.Client()
+    global grader_table
+    global req_table
+    
+    # Create the query to get the cohort info
+    q_cohort = 'select grader.*, pat.sex from '+grader_table+' grader'
+    q_cohort += ' join lab.proc_ord_projects projects on grader.proc_ord_id = projects.proc_ord_id'
+    q_cohort += ' join arcus.procedure_order proc on projects.proc_ord_id = proc.proc_ord_id'
+    q_cohort += ' join arcus.patient pat on pat.pat_id = proc.pat_id'
+    # If only requested
+    if only_requested:
+        q_cohort += ' join '+req_table+' req on req.proc_ord_id = grader.proc_ord_id'
+    # Add the project condition
+    q_cohort += ' where projects.project = "'+cohort+'"'
+    q_cohort += ' and grade >= 0 and grade <= 2'
+    q_cohort += ' and grader.grade_category = "Unique"'
+    q_cohort += ' order by grader.proc_ord_id, grader.pat_id desc'
+
+    # Execute the query
+    df_cohort = client.query(q_cohort).to_dataframe()
+
+    # Drop duplicates
+    df_cohort = df_cohort.drop_duplicates()
+    
+    # Add an age in years column
+    df_cohort['age_in_years'] = df_cohort['age_in_days']/365.25
+
+    # Get the average grade for each report
+    proc_ids = list(set(df_cohort['proc_ord_id'].values))
+    df_cohort['avg_grade_group'] = 999.0
+    df_cohort['avg_grade'] = 999.0
+    for proc_id in proc_ids:
+        df_cohort.loc[df_cohort['proc_ord_id'] == proc_id, 'avg_grade'] = np.mean(df_cohort[df_cohort['proc_ord_id'] == proc_id]['grade'].values)
+        df_cohort.loc[df_cohort['proc_ord_id'] == proc_id, 'avg_grade_group'] = np.floor(np.mean(df_cohort[df_cohort['proc_ord_id'] == proc_id]['grade'].values))
+
+    # Get only the subset of columns we care about
+    cols = ['proc_ord_id', 'age_in_days', 'age_in_years', 'proc_ord_year', 'avg_grade', 'avg_grade_group', 'sex']
+    df_cohort = df_cohort[cols].drop_duplicates()
+
+    return df_cohort
