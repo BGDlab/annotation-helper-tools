@@ -34,8 +34,11 @@ def backup_grader_table():
     # Step 2: drop table lab.bak_grader_table_with_metadata
     grader_table_name_bak = grader_table_name.replace(".", ".bak_")
     q_drop_table = "drop table "+grader_table_name_bak
-    job = client.query(q_drop_table)
-    job.result()
+    try:
+        job = client.query(q_drop_table)
+        job.result()
+    except: 
+        pass
 
     # Step 3: create table lab.bak_grader_table_with_metadata
     q_create_backup_table = "create table "+grader_table_name_bak+" as select * from "+grader_table_name
@@ -408,7 +411,7 @@ def mark_one_report_sql(name, project, to_highlight={}):
             + '" and grade = 999 and grade_category = "Unique"'
             + ' LIMIT 1'
         )
-        print(q_get_single_row)
+        # print(q_get_single_row)
         df = client.query(q_get_single_row).to_dataframe()
         source_table = "arcus.procedure_order_narrative"
 
@@ -422,8 +425,21 @@ def mark_one_report_sql(name, project, to_highlight={}):
 
     print("Year of scan:", df["proc_ord_year"].values[0])
     print("Age at scan:", np.round(df["age_in_days"].values[0] / 365.25, 2), "years")
-    # print("Project:", project) 
     proc_ord_id = df["proc_ord_id"].values[0]
+    # Fixing the project name confusion
+    # Query the project table
+    q_projects = 'select * from '+project_table_name+' where proc_ord_id = "'+proc_ord_id+'"'
+    df_projects = client.query(q_projects).to_dataframe()
+    proc_projects = df_projects['project'].values
+    if project in proc_projects:
+        print("Project:", project)
+        print()
+    else:
+        print("WARNING: report "+str(proc_ord_id)+" does not appear to belong to the cohort for "+project)
+        print("It does belong to the following cohorts: "+", ".join(list(proc_projects)))
+        print()
+
+    
     print_report(proc_ord_id, client, to_highlight, source_table)  # -- LOH
     grade = get_grade(enable_md_flag=False)
 
