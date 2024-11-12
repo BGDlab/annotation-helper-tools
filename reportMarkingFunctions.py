@@ -11,7 +11,7 @@ from datetime import date
 from projectTableFunctions import *
 
 num_validation_graders = 2
-grader_table_name = "lab.test_grader_table_with_metadata"
+grader_table_name = "lab.grader_table_with_metadata_project_independent"
 project_table_name = "lab.proc_ord_projects"
 
 
