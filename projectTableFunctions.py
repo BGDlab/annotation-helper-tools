@@ -10,8 +10,8 @@ import json
 import matplotlib.pyplot as plt
 
 
-req_table = "lab.test_requested_sessions_main_with_metadata"
-grader_table = "lab.test_grader_table_with_metadata"
+req_table = "lab.requested_sessions_main_with_metadata_project_independent"
+grader_table = "lab.grader_table_with_metadata_project_independent"
 
 
 def add_reports_to_project(cohort):
@@ -53,7 +53,7 @@ def get_project_report_stats(cohort):
     q_project_reports = 'select * from lab.proc_ord_projects where project = "'+cohort+'"'
     df_project_reports = client.query(q_project_reports).to_dataframe()
     # Get the number of reports with the project label in the grader table
-    q_graded_reports = 'select distinct reports.* from lab.test_grader_table_with_metadata reports join lab.proc_ord_projects projects on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) where projects.project = "'+cohort+'"'
+    q_graded_reports = 'select distinct reports.* from lab.grader_table_with_metadata_project_independent reports join lab.proc_ord_projects projects on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) where projects.project = "'+cohort+'"'
     df_graded_reports = client.query(q_graded_reports).to_dataframe()
     # Print info
     print("Project:", cohort)
