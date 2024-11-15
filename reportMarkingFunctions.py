@@ -544,7 +544,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
             count(proc_ord_id) as counter,
             proc_ord_id
           from
-            lab.test_grader_table_with_metadata
+            '''+grader_table_name+'''
           group by proc_ord_id
         )
         select
@@ -679,7 +679,7 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
             count(proc_ord_id) as counter,
             proc_ord_id
           from
-            lab.test_grader_table_with_metadata
+            '''+grader_table_name+'''
           group by proc_ord_id
         )
         select
