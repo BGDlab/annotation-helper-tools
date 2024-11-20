@@ -4,6 +4,7 @@ from sklearn.metrics import cohen_kappa_score
 from IPython.display import clear_output
 from google.cloud import bigquery  # SQL table interface on Arcus
 
+grader_table = "lab.grader_table_with_metadata_project_independent"
 
 ##
 # Get the proc_ord_id values for the reliability reports
@@ -18,7 +19,7 @@ def get_reliability_ratings_df():
     # Initialize the client service
     client = bigquery.Client()
 
-    reliability_ratings_query = "select * from lab.grader_table_with_metadata where grade_category = 'Reliability';"
+    reliability_ratings_query = "select * from "+grader_table+" where grade_category = 'Reliability';"
     df_reliability = client.query(reliability_ratings_query).to_dataframe()
     df_reliability[["grade", "proc_ord_id"]] = df_reliability[
         ["grade", "proc_ord_id"]
@@ -41,7 +42,7 @@ def get_reliability_ratings_df():
         distinct(proc_ord_id) as proc_ord_id,
         grader_name
       from
-        lab.grader_table_with_metadata
+        """+grader_table+"""
       where
         grade_category = 'Reliability'
         and grader_name = 'Megan M. Himes'
@@ -49,7 +50,7 @@ def get_reliability_ratings_df():
     select
       main.proc_ord_id
     from
-      lab.grader_table_with_metadata main
+      """+grader_table+""" main
       inner join cte on main.proc_ord_id = cte.proc_ord_id
     where
       main.grader_name = "Alesandra Gorgone"
@@ -150,8 +151,8 @@ def calc_kappa_0_v_all(user1_grades, user2_grades):
 def get_reports_for_user(user, proc_ord_ids):
     client = bigquery.Client()
 
-    get_user_reports = "select cast(proc_ord_id as int64) as proc_ord_id, grade from lab.grader_table_with_metadata "
-    get_user_reports += "where grader_name = '" + user
+    get_user_reports = "select cast(proc_ord_id as int64) as proc_ord_id, grade from "+grader_table
+    get_user_reports += " where grader_name = '" + user
     get_user_reports += "' and grade_category = 'Reliability';"
 
     user_reliablity_reports = client.query(get_user_reports).to_dataframe()
