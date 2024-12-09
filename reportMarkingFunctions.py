@@ -537,12 +537,13 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
 
     # Get the number of reports for a cohort
     get_project_report_stats(project_id)
-
+    
     # Get the proc_ord_ids from the grader table
     q_get_validation_reports = '''with CTE as (
           select
             count(proc_ord_id) as counter,
-            proc_ord_id
+            proc_ord_id,
+            avg(grade) as avg_grade
           from
             '''+grader_table_name+'''
           group by proc_ord_id
@@ -551,7 +552,14 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
         distinct 
           CTE.counter,
           grader.proc_ord_id,
-          grader.grader_name
+          grader.grader_name'''
+    
+    if project_id == "Pb Cohort":
+        q_get_validation_reports += ''',
+        pb.sec_priority,
+        pb.priority'''
+        
+    q_get_validation_reports += '''
         from '''+grader_table_name+''' grader
           join lab.proc_ord_projects projects on (
             grader.proc_ord_id = projects.proc_ord_id
@@ -559,13 +567,25 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
           )
           join CTE on (
             grader.proc_ord_id = CTE.proc_ord_id
-          )
+          ) '''
+    
+    if project_id == "Pb Cohort":
+        q_get_validation_reports += '''  join lab.pb_ses_priority pb on pb.proc_ord_id = grader.proc_ord_id '''
+
+    q_get_validation_reports += '''
         where
           projects.project = "'''+project_id+'''"
           and grader.grader_name != "'''+name+'''"  
           and CTE.counter < '''+str(num_validation_graders)+'''
           and grader.grader_name not like "Coarse Text Search%"
           and grade_category = "Unique"
+          and avg_grade > 0 
+          and avg_grade <= 2 '''
+    if project_id == "Pb Cohort":
+        q_get_validation_reports += '''
+        order by pb.sec_priority asc, pb.priority asc '''
+        
+    q_get_validation_reports += '''
         limit '''+str(num_to_add)+''';'''
     
     df_validation_reports = client.query(q_get_validation_reports).to_dataframe()
@@ -583,7 +603,12 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
           proc.start_datetime
         from 
           lab.proc_ord_projects projects
-          join arcus.procedure_order proc on proc.proc_ord_id = projects.proc_ord_id
+          join arcus.procedure_order proc on proc.proc_ord_id = projects.proc_ord_id'''
+    
+    if project_id == "Pb Cohort":
+        q_get_new_reports += ' join lab.pb_ses_priority pb on pb.proc_ord_id = proc.proc_ord_id '
+        
+    q_get_new_reports += '''
         where
           project = "'''+project_id+'''"
           and projects.proc_ord_id not in (
@@ -591,7 +616,12 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
               grader.proc_ord_id
             from '''+ grader_table_name + ''' grader
           )
-        order by proc.start_datetime
+        order by proc.start_datetime desc'''
+    
+    if project_id == 'Pb Cohort':
+        q_get_new_reports += ', pb.sec_priority asc, pb.priority asc '''
+        
+    q_get_new_reports += '''
         limit '''+str(num_to_add-len(to_add_validation))+''';'''
 
     df_new_reports = client.query(q_get_new_reports).to_dataframe()
@@ -686,7 +716,8 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
         distinct 
           CTE.counter,
           grader.proc_ord_id,
-          grader.grader_name
+          grader.grader_name,
+          grader.proc_ord_year
         from '''+grader_table_name+''' grader
           join lab.proc_ord_projects projects on (
             grader.proc_ord_id = projects.proc_ord_id
@@ -700,6 +731,7 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
           and CTE.counter < '''+str(num_validation_graders)+'''
           and grader.grader_name not like "Coarse Text Search%"
           and grade_category = "Unique"
+        order by grader.proc_ord_year desc
         limit '''+str(num_to_add)+''';'''
     df_grade_table = client.query(q_grade_table).to_dataframe()
     
