@@ -13,11 +13,13 @@ from projectTableFunctions import *
 num_validation_graders = 2
 grader_table_name = "lab.grader_table_with_metadata_project_independent"
 project_table_name = "lab.proc_ord_projects"
+skipped_reports_table = "lab.skipped_reports"
 
 
 ##
 # Back up grader table. Can be run on its own
 # or within another function
+# TODO: generalize backup to be SLIP or Non-SLIP
 def backup_grader_table():
     global grader_table_name
     client = bigquery.Client()
@@ -54,7 +56,11 @@ def backup_grader_table():
 # @param grader A string of the grader's name (leave blank to review all flagged reports)
 # @param flag The level of "skip" to examine (-1 is group, -2 is clinician)
 def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
+    # Handle different projects: 
+    # If the project is not specified, assume we're looking only at SLIP grading
+        
     global grader_table_name
+    global skipped_reports_table
     # Get the flagged reports
     # Start the query
     q = "select distinct * from "+grader_table_name
@@ -86,13 +92,14 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
         # Add a print to show why the report was previously flagged
         # Check if the report is in the lab.skipped_reports table
         check_skipped_query = (
-            "select * from lab.skipped_reports where proc_ord_id = '"
+            "select * from "+skipped_reports_table+" where proc_ord_id = '"
             + str(row["proc_ord_id"])
         )
         check_skipped_query += "' and grader_name = '" + row["grader_name"] + "';"
         skipped_df = client.query(check_skipped_query).to_dataframe()
 
-        print("Grader: ", row["grader_name"])
+        print("Grader:", row["grader_name"])
+        print("Grading criteria:", row["grade_criteria"])
 
         is_skip_logged = False
         if len(skipped_df) == 1:
@@ -134,7 +141,7 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
 
             if is_skip_logged:
                 # Update the skipped reports table
-                q_update_skipped = "update lab.skipped_reports set grade = " + str(
+                q_update_skipped = "update "+skipped_reports_table+" set grade = " + str(
                     grade
                 )
                 q_update_skipped += ', regrade_reason = "' + regrade_reason + '" '
@@ -148,7 +155,7 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
             else:
                 # Add the report to the skipped reports table.
                 # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason')
-                q_skip_report = "insert into lab.skipped_reports values ("
+                q_skip_report = "insert into "+skipped_reports_table+" values ("
                 today = date.today().strftime("%Y-%m-%d")
                 q_skip_report += (
                     "'"
@@ -160,7 +167,9 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
                     + "', '', '', '"
                     + today
                     + "', '"
-                    + regrade_reason
+                    + regrade_reason 
+                    + "', '"
+                    + grade_criteria
                     + "');"
                 )
 
@@ -390,6 +399,7 @@ def mark_one_report_sql(name, project, to_highlight={}):
     # Initialize the client service
     client = bigquery.Client()
     global grader_table_name
+    global skipped_reports_table
 
     # Get a row from the grader table for the specified rater that has not been graded yet
     # If there's any reliability reports, start there
@@ -405,7 +415,8 @@ def mark_one_report_sql(name, project, to_highlight={}):
         # If no reports need Reliability, then get Unique reports
         q_get_single_row = (
             'SELECT * FROM '+grader_table_name
-            + ' reports join lab.proc_ord_projects projects on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) '
+            + ' reports join '+ project_table_name
+            + ' projects on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) '
             + ' WHERE grader_name = "'
             + name
             + '" and grade = 999 and grade_category = "Unique"'
@@ -425,6 +436,7 @@ def mark_one_report_sql(name, project, to_highlight={}):
 
     print("Year of scan:", df["proc_ord_year"].values[0])
     print("Age at scan:", np.round(df["age_in_days"].values[0] / 365.25, 2), "years")
+    print("Grading Criteria:", df['grade_criteria'].values[0])
     proc_ord_id = df["proc_ord_id"].values[0]
     # Fixing the project name confusion
     # Query the project table
@@ -448,8 +460,8 @@ def mark_one_report_sql(name, project, to_highlight={}):
         # Ask the user for a reason
         skip_reason = get_reason("skip")
         # Write a query to add the report to the skipped reports table.
-        # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason')
-        q_skip_report = "insert into lab.skipped_reports values ("
+        # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason', 'grade_criteria')
+        q_skip_report = "insert into "+skipped_reports_table+" values ("
         today = date.today().strftime("%Y-%m-%d")
         q_skip_report += (
             "'"
@@ -485,36 +497,40 @@ def mark_one_report_sql(name, project, to_highlight={}):
 
 ##
 #
-def load_cohort_config(project_id):
-    fn = "./queries/config.json"  ## write this file
+def load_cohort_config(project_id, field):
+    fn = "./queries/config.json" 
     with open(fn, "r") as f:
         project_lookup = json.load(f)
 
     # Get the info for the specified project
     project_info = project_lookup[project_id]
-    query_fn = project_info["query"]
-    q_dx_filter = ""
-    if "dx_filter" in project_info:
-        # Get the name of the dx filter file
-        fn_dx_filter = project_info["dx_filter"]
-        # Expand the tilda for each user
-        fn_dx_filter_full = os.path.expanduser(fn_dx_filter)
-        # Convert the contents of the dx filter file to a sql query
-        q_dx_filter = convert_exclude_dx_csv_to_sql(fn_dx_filter_full)
+    if field == "query":
+        query_fn = project_info["query"]
+        q_dx_filter = ""
+        if "dx_filter" in project_info:
+            # Get the name of the dx filter file
+            fn_dx_filter = project_info["dx_filter"]
+            # Expand the tilda for each user
+            fn_dx_filter_full = os.path.expanduser(fn_dx_filter)
+            # Convert the contents of the dx filter file to a sql query
+            q_dx_filter = convert_exclude_dx_csv_to_sql(fn_dx_filter_full)
+    
+        ## --- I think this was put into a function?
+        # Open the specified query file
+        with open(query_fn, "r") as f:
+            q_project = f.read()
+    
+        # If there is a dx filter, incorporate it into the loaded query
+        if q_dx_filter != "":
+            q_tmp = q_dx_filter + q_project.split("where")[0]
+            q_tmp += "left join exclude_table on proc_ord.pat_id = exclude_table.pat_id where exclude_table.pat_id is null and"
+            q_tmp += q_project.split("where")[1]
+            q_project = q_tmp
+    
+        return q_project
 
-    ## --- I think this was put into a function?
-    # Open the specified query file
-    with open(query_fn, "r") as f:
-        q_project = f.read()
-
-    # If there is a dx filter, incorporate it into the loaded query
-    if q_dx_filter != "":
-        q_tmp = q_dx_filter + q_project.split("where")[0]
-        q_tmp += "left join exclude_table on proc_ord.pat_id = exclude_table.pat_id where exclude_table.pat_id is null and"
-        q_tmp += q_project.split("where")[1]
-        q_project = q_tmp
-
-    return q_project
+    elif field == "grade_criteria":
+        return project_info['grade_criteria']
 
 
 ##
@@ -602,7 +618,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
           projects.*,
           proc.start_datetime
         from 
-          lab.proc_ord_projects projects
+          '''+project_table_name+''' projects
           join arcus.procedure_order proc on proc.proc_ord_id = projects.proc_ord_id'''
     
     if project_id == "Pb Cohort":
@@ -649,7 +665,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
         print(len(df), "reports are in the queue for grader", name)
 
 
-def add_reports_for_grader(proc_ord_ids, grader_name, project_id=""):
+def add_reports_for_grader(proc_ord_ids, grader_name, project_id):
     client = bigquery.Client()
     global grader_table_name
     
@@ -660,6 +676,9 @@ def add_reports_for_grader(proc_ord_ids, grader_name, project_id=""):
     
     # Convert the list of proc_ord_ids to a SQL string
     procs_str = ' ("'+'", "'.join(proc_ord_ids)+'") '
+
+    # Get the grading criteria field for the project
+    criteria = load_cohort_config(project_id, "grade_criteria")
     
     # Set up the query
     q_insert = '''insert into '''+grader_table_name+cols_str+'''
@@ -675,7 +694,8 @@ def add_reports_for_grader(proc_ord_ids, grader_name, project_id=""):
           "arcus.procedure_order" as report_origin_table, '''
     if "project" in cols_str:
         q_insert += '"'+project_id+'" as project, '
-    q_insert += '''"0000-00-00" as grade_date 
+    q_insert += '"0000-00-00" as grade_date, '
+    q_insert += '"'+criteria+'''" as grade_criteria
         from
           arcus.procedure_order proc_ord
           join arcus.patient pat on proc_ord.pat_id = pat.pat_id
@@ -699,6 +719,7 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
     print(
         "It is expected for this function to take several minutes to run. Your patience is appreciated."
     )
+    print("Looking at", grader_table_name)
 
     # Initialize the client service
     client = bigquery.Client()
@@ -892,9 +913,9 @@ def check_reliability_ratings(df_grader):
             != 999
         ]
     )
-
     print(num_reliability)
     print(len(reliability_ids))
+
     assert num_reliability == len(reliability_ids)
     print(
         name,
@@ -923,6 +944,7 @@ def check_reliability_ratings(df_grader):
 def release_reports(grader_name, reports_list):
     # Initialize the client
     client = bigquery.Client()
+    # Use the previously specified global vars
     global grader_table_name
 
     # For each report
@@ -950,6 +972,7 @@ def release_reports(grader_name, reports_list):
 # Check
 def backup_reliability_grades(user):
     client = bigquery.Client()
+    # Use currently set global vars
     global grader_table_name
 
     q = "select * from "+grader_table_name+" where grader_name = '" + user
@@ -1184,24 +1207,7 @@ def get_grade(enable_md_flag=False):
         print("Saving your grade of", grade, "for this report.")
         return grade
 
-
-def get_grader_status_report(name):
-    client = bigquery.Client()
-    global grader_table_name
-
-    query = "select * from "+grader_table_name+" where "
-    query += "grader_name = '" + name + "';"
-    print(query)
-    df = client.query(query).to_dataframe()
-
-    # Case: user not in table
-    if len(df) == 0:
-        print("User is not in the table yet.")
-        return
-
-    # Reliability ratings
-    check_reliability_ratings(df)
-
+def check_unique_grades(df, name):
     # Unique
     df_unique_reports = df[df["grade_category"] == "Unique"]
     df_graded_unique_reports = df[
@@ -1220,6 +1226,42 @@ def get_grader_status_report(name):
             df_graded_unique_reports["grade"] == grade
         ].shape[0]
         print(num_graded, "have been given a grade of", grade)
+    
+
+def get_grader_status_report(name):
+    client = bigquery.Client()
+    # Declare global var, but automatically start with SLIP regardless
+    global grader_table_name
+
+    query = "select * from "+grader_table_name.replace("nonslip_", "")+" where "
+    query += "grader_name = '" + name + "' and grade_criteria = 'SLIP' ;"
+    df = client.query(query).to_dataframe()
+
+    # Case: user not in table
+    if len(df) == 0:
+        print("User is not grading SLIP reports yet.")
+        return
+
+    # Reliability ratings
+    check_reliability_ratings(df)
+    # SLIP grades
+    print("SLIP ---------")
+    check_unique_grades(df, name)
+
+    # See if the user is also grading nonslip reports
+    query = "select * from "+grader_table_name+" where "
+    query += "grader_name = '" + name + "' and grade_criteria like 'nonSLIP';"
+    df = client.query(query).to_dataframe()
+
+    # Case: user not in table
+    if len(df) == 0:
+        print("User is not grading non-SLIP reports.")
+    else:
+        # Non-SLIP grades
+        print("Non-SLIP --------")
+        check_unique_grades(df, name)
+
+
 
 
 # Main

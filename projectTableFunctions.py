@@ -18,7 +18,7 @@ def add_reports_to_project(cohort):
     # Set up the client
     client = bigquery.Client()
     # Load the query for the cohort
-    q_cohort_to_add = load_cohort_config(cohort)
+    q_cohort_to_add = load_cohort_config(cohort, 'query')
     # Get all the reports in the cohort
     df_cohort_to_add = client.query(q_cohort_to_add).to_dataframe()
     

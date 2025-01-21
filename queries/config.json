@@ -1,40 +1,55 @@
 {
     "SLIP Neonates": {
+        "grade_criteria": "SLIP",
         "query": "./queries/slip_neonates.txt",
         "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "SLIP Toddlers": {
+        "grade_criteria": "SLIP",
         "query": "./queries/slip_toddlers.txt",
         "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "SLIP PreK": {
+        "grade_criteria": "SLIP",
         "query": "./queries/slip_prek.txt",
         "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "SLIP Elementary": {
+        "grade_criteria": "SLIP",
         "query": "./queries/slip_elementary.txt",
         "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "SLIP Adolescents": {
+        "grade_criteria": "SLIP",
         "query": "./queries/slip_adolescents.txt",
         "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     },
     "Clinical Imaging Genetics": {
+        "grade_criteria": "SLIP",
         "query": "./queries/clinical_imaging_genetics.txt"
     },
     "VIP Clinical Imaging Genetics": {
+        "grade_criteria": "SLIP",
         "query": "./queries/clinical_imaging_genetics_vip.txt"
     },
     "Pb Cohort": {
+        "grade_criteria": "SLIP",
         "query": "./queries/pb_all.txt"
     },
     "Clinical Fetal": {
+        "grade_criteria": "SLIP",
         "query": "./queries/clinical_fetal.txt"
     },
     "Indication Psychosis":  {
+        "grade_criteria": "SLIP",
         "query": "./queries/indication_psychosis.txt"
     },
     "22q11": {
+        "grade_criteria": "SLIP",
         "query": "./queries/22q_2020.txt"
+    },
+    "NF1": {
+        "grade_criteria": "nonSLIP: NF1",
+        "query": "./queries/nf1.txt"
     }
 }
