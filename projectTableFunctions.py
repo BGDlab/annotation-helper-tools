@@ -14,6 +14,44 @@ req_table = "lab.requested_sessions_main_with_metadata_project_independent"
 grader_table = "lab.grader_table_with_metadata_project_independent"
 
 
+##
+#
+def load_cohort_config(project_id, field):
+    fn = "./queries/config.json" 
+    with open(fn, "r") as f:
+        project_lookup = json.load(f)
+
+    # Get the info for the specified project
+    project_info = project_lookup[project_id]
+    if field == "query":
+        query_fn = project_info["query"]
+        q_dx_filter = ""
+        if "dx_filter" in project_info:
+            # Get the name of the dx filter file
+            fn_dx_filter = project_info["dx_filter"]
+            # Expand the tilda for each user
+            fn_dx_filter_full = os.path.expanduser(fn_dx_filter)
+            # Convert the contents of the dx filter file to a sql query
+            q_dx_filter = convert_exclude_dx_csv_to_sql(fn_dx_filter_full)
+    
+        ## --- I think this was put into a function?
+        # Open the specified query file
+        with open(query_fn, "r") as f:
+            q_project = f.read()
+    
+        # If there is a dx filter, incorporate it into the loaded query
+        if q_dx_filter != "":
+            q_tmp = q_dx_filter + q_project.split("where")[0]
+            q_tmp += "left join exclude_table on proc_ord.pat_id = exclude_table.pat_id where exclude_table.pat_id is null and"
+            q_tmp += q_project.split("where")[1]
+            q_project = q_tmp
+    
+        return q_project
+
+    elif field == "grade_criteria":
+        return project_info['grade_criteria']
+
+
 def add_reports_to_project(cohort):
     # Set up the client
     client = bigquery.Client()
@@ -49,12 +87,18 @@ def add_reports_to_project(cohort):
 def get_project_report_stats(cohort):
     # Set up the client
     client = bigquery.Client()
+    
     # Get the number of reports with the project label
     q_project_reports = 'select * from lab.proc_ord_projects where project = "'+cohort+'"'
     df_project_reports = client.query(q_project_reports).to_dataframe()
+
+    # Load the config
+    criteria = load_cohort_config(cohort, "grade_criteria")
+    
     # Get the number of reports with the project label in the grader table
-    q_graded_reports = 'select distinct reports.* from lab.grader_table_with_metadata_project_independent reports join lab.proc_ord_projects projects on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) where projects.project = "'+cohort+'"'
+    q_graded_reports = 'select distinct reports.* from lab.grader_table_with_metadata_project_independent reports join lab.proc_ord_projects projects on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) where projects.project = "'+cohort+'" and grade_criteria = "'+criteria+'";'
     df_graded_reports = client.query(q_graded_reports).to_dataframe()
+    
     # Print info
     print("Project:", cohort)
     print("Total reports:", len(df_project_reports), "(note each report must be graded by 2 graders)")

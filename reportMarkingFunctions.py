@@ -496,44 +496,6 @@ def mark_one_report_sql(name, project, to_highlight={}):
 
 
 ##
-#
-def load_cohort_config(project_id, field):
-    fn = "./queries/config.json" 
-    with open(fn, "r") as f:
-        project_lookup = json.load(f)
-
-    # Get the info for the specified project
-    project_info = project_lookup[project_id]
-    if field == "query":
-        query_fn = project_info["query"]
-        q_dx_filter = ""
-        if "dx_filter" in project_info:
-            # Get the name of the dx filter file
-            fn_dx_filter = project_info["dx_filter"]
-            # Expand the tilda for each user
-            fn_dx_filter_full = os.path.expanduser(fn_dx_filter)
-            # Convert the contents of the dx filter file to a sql query
-            q_dx_filter = convert_exclude_dx_csv_to_sql(fn_dx_filter_full)
-    
-        ## --- I think this was put into a function?
-        # Open the specified query file
-        with open(query_fn, "r") as f:
-            q_project = f.read()
-    
-        # If there is a dx filter, incorporate it into the loaded query
-        if q_dx_filter != "":
-            q_tmp = q_dx_filter + q_project.split("where")[0]
-            q_tmp += "left join exclude_table on proc_ord.pat_id = exclude_table.pat_id where exclude_table.pat_id is null and"
-            q_tmp += q_project.split("where")[1]
-            q_project = q_tmp
-    
-        return q_project
-
-    elif field == "grade_criteria":
-        return project_info['grade_criteria']
-
-
-##
 # Get more proc_ord_id for which no reports have been rated for the specified user to grade
 # @param name A str containing the full name of the grader (to also be referenced in publications)
 def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=100):
@@ -550,6 +512,9 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
 
     # Initialize the client service
     client = bigquery.Client()
+
+    # Get the grading criteria
+    criteria = load_cohort_config(project_id, "grade_criteria")
 
     # Get the number of reports for a cohort
     get_project_report_stats(project_id)
@@ -595,6 +560,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
           and CTE.counter < '''+str(num_validation_graders)+'''
           and grader.grader_name not like "Coarse Text Search%"
           and grade_category = "Unique"
+          and grade_criteria = "'''+criteria+'''"
           and avg_grade > 0 
           and avg_grade <= 2 '''
     if project_id == "Pb Cohort":
@@ -703,7 +669,7 @@ def add_reports_for_grader(proc_ord_ids, grader_name, project_id):
           proc_ord.proc_ord_id in '''+procs_str+'''
         order by 
           proc_ord.proc_ord_year desc;'''
-    print(q_insert)
+    # print(q_insert)
     j_insert = client.query(q_insert)
     j_insert.result()
 
@@ -1250,7 +1216,7 @@ def get_grader_status_report(name):
 
     # See if the user is also grading nonslip reports
     query = "select * from "+grader_table_name+" where "
-    query += "grader_name = '" + name + "' and grade_criteria like 'nonSLIP';"
+    query += "grader_name = '" + name + "' and grade_criteria like 'nonSLIP%';"
     df = client.query(query).to_dataframe()
 
     # Case: user not in table
