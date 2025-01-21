@@ -474,7 +474,9 @@ def mark_one_report_sql(name, project, to_highlight={}):
             + str(today)
             + "', '"
             + skip_reason
-            + "', '', '');"
+            + "', '', '', '"
+            + df['grade_criteria'].values[0]
+            + "');"
         )
 
         # Execute the query
