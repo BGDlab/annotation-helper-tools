@@ -124,9 +124,8 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
         print()
         # ask for grade
         grade = get_grade(enable_md_flag=True)
-        print(grade)
 
-        if grade != -1 or grade != -2:
+        if not (grade == -1 or grade == -2 or grade == 503):
             regrade_reason = get_reason("regrade")
 
             # Update the grader table with the new grade
@@ -456,9 +455,12 @@ def mark_one_report_sql(name, project, to_highlight={}):
     grade = get_grade(enable_md_flag=False)
 
     # write the case to handle the skipped reports 
-    if grade == -1:
+    if grade == -1 or grade == 503:
         # Ask the user for a reason
-        skip_reason = get_reason("skip")
+        if grade == -1:
+            skip_reason = get_reason("skip")
+        elif grade == 503:
+            skip_reason = "OUTSIDE SCAN"
         # Write a query to add the report to the skipped reports table.
         # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason', 'grade_criteria')
         q_skip_report = "insert into "+skipped_reports_table+" values ("
@@ -1102,18 +1104,18 @@ def get_reason(usage):
 
 def get_grade(enable_md_flag=False):
     if enable_md_flag:
-        potential_grades = ["0", "1", "2", "-1", "-2"]
+        potential_grades = ["0", "1", "2", "-1", "-2", "503"]
         grade = str(
             input(
-                "Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip/-2 escalate to clinician): "
+                "Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip/-2 escalate to clinician/503 outside scan): "
             )
         )
 
     else:
-        potential_grades = ["0", "1", "2", "-1"]
+        potential_grades = ["0", "1", "2", "-1", "503"]
         grade = str(
             input(
-                "Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): "
+                "Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip/503 outside scan): "
             )
         )
 
@@ -1171,6 +1173,9 @@ def get_grade(enable_md_flag=False):
             "WARNING: this report is being marked as SKIPPED for you AND is being escalated to a clinician for further review."
         )
         return -2
+    elif confirm_grade == "503":
+        print("This report is being SKIPPED and labeled as an outside scan.")
+        return 503
     else:
         print("Saving your grade of", grade, "for this report.")
         return grade
