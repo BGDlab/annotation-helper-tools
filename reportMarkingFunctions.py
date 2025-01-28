@@ -450,6 +450,8 @@ def mark_one_report_sql(name, project, to_highlight={}):
         print("It does belong to the following cohorts: "+", ".join(list(proc_projects)))
         print()
 
+    if df['grade_category'].values[0] == "Reliability":
+        print("This is a Reliability report, not a unique report")
     
     print_report(proc_ord_id, client, to_highlight, source_table)  # -- LOH
     grade = get_grade(enable_md_flag=False)
