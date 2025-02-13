@@ -604,7 +604,13 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
               grader.proc_ord_id
             from '''+ grader_table_name + ''' grader
           )
-        order by proc.start_datetime desc'''
+        '''
+
+    if project_id == "NF1":
+        q_get_new_reports += '''order by proc.proc_ord_age asc''' # for the NF1 project, we want to grade the youngest scans first
+    else:
+        q_get_new_reports += '''order by proc.start_datetime desc''' # for all other projects, order by start_datetime
+    
     
     if project_id == 'Pb Cohort':
         q_get_new_reports += ', pb.sec_priority asc, pb.priority asc '''
