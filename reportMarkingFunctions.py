@@ -604,14 +604,30 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
               grader.proc_ord_id
             from '''+ grader_table_name + ''' grader
           )
-        order by proc.start_datetime desc'''
+        '''
+    if project_id == "SLIP Adolescents":
+        q_get_new_reports += '''
+        order by 
+            date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.start_datetime, day) <= 0 desc,
+            abs(date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.start_datetime, day)) asc
+        ''' 
+        # for the SLIP Adolescents project, we want to first prioritize the earliest scans as far as 6 months
+        # prior to support the prospective study. Then we want to prioritize scans in reverse chronological order
+        # to capture the most recent scans.
+    elif project_id == "NF1":
+        q_get_new_reports += '''order by proc.proc_ord_age asc''' # for the NF1 project, we want to grade the youngest scans first
+    else:
+        q_get_new_reports += '''order by proc.start_datetime desc''' # for all other projects, order by start_datetime
+    
     
     if project_id == 'Pb Cohort':
         q_get_new_reports += ', pb.sec_priority asc, pb.priority asc '''
         
     q_get_new_reports += '''
         limit '''+str(num_to_add-len(to_add_validation))+''';'''
-
+    
+    # print(q_get_new_reports)
+    
     df_new_reports = client.query(q_get_new_reports).to_dataframe()
     to_add_new = list(set(df_new_reports['proc_ord_id'].values))
     if len(to_add_new) > 0:
