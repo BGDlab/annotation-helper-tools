@@ -16,6 +16,17 @@ grader_table = "lab.grader_table_with_metadata_project_independent"
 
 ##
 #
+
+def load_project(project_name, name):
+    if project_name != "AUTO":
+        project_id = project
+    else:
+        with open("~/arcus/shared/.auto_control.json", 'r') as file:
+            project_assign = json.load(file)
+            project_id = project_id[name]
+    print(f"Project: {project_id}")
+    return(project_id)
+
 def load_cohort_config(project_id, field):
     fn = "./queries/config.json" 
     with open(fn, "r") as f:
