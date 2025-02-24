@@ -19,16 +19,22 @@ grader_table = "lab.grader_table_with_metadata_project_independent"
 
 def load_project(project_name, name):
     if project_name != "AUTO":
-        project_id = project
+        project_id = project_name
     else:
         try:
-            with open(os.path.expanduser("~/arcus/shared/annotation-helper-tools/auto_control.json"), 'r') as file:
+            with open(os.path.expanduser("~/arcus/shared/annotation-helper-tools/behind_the_scenes/auto_control.json"), 'r') as file:
                 project_assign = json.load(file)
                 project_id = project_assign[name]
         except KeyError:
-            raise KeyError(f"Grader {name} not found in auto_control.json. Please manually specify your project instead of using AUTO.")
-    print(f"Project: {project_id}")
+            project_id = project_assign["Default"]
+    print(f"Grading reports under project {project_id}")
     return(project_id)
+
+def phrasesToHighlightFn(phrases_file = "phrases_to_highlight.json"):
+    # Load the dictionary of phrases to highlight in certain colors 
+    with open(phrases_file, 'r', encoding='utf-8') as f:
+        toHighlight = json.load(f)
+    return(toHighlight)
 
 def load_cohort_config(project_id, field):
     fn = "./queries/config.json" 

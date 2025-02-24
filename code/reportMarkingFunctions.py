@@ -901,8 +901,8 @@ def check_reliability_ratings(df_grader):
             != 999
         ]
     )
-    print(num_reliability)
-    print(len(reliability_ids))
+    # print(num_reliability)
+    # print(len(reliability_ids))
 
     assert num_reliability == len(reliability_ids)
     print(
@@ -1227,7 +1227,6 @@ def get_grader_status_report(name):
     query = "select * from "+grader_table_name.replace("nonslip_", "")+" where "
     query += "grader_name = '" + name + "' and grade_criteria = 'SLIP' ;"
     df = client.query(query).to_dataframe()
-
     # Case: user not in table
     if len(df) == 0:
         print("User is not grading SLIP reports yet.")
@@ -1236,6 +1235,7 @@ def get_grader_status_report(name):
     # Reliability ratings
     check_reliability_ratings(df)
     # SLIP grades
+    print("")
     print("SLIP ---------")
     check_unique_grades(df, name)
 
@@ -1245,9 +1245,9 @@ def get_grader_status_report(name):
     df = client.query(query).to_dataframe()
 
     # Case: user not in table
-    if len(df) == 0:
-        print("User is not grading non-SLIP reports.")
-    else:
+    if len(df) > 0:
+        print("")
+        print("User is also grading non-SLIP reports.")
         # Non-SLIP grades
         print("Non-SLIP --------")
         check_unique_grades(df, name)
