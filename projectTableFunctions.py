@@ -21,9 +21,12 @@ def load_project(project_name, name):
     if project_name != "AUTO":
         project_id = project
     else:
-        with open("~/arcus/shared/.auto_control.json", 'r') as file:
-            project_assign = json.load(file)
-            project_id = project_id[name]
+        try:
+            with open(os.path.expanduser("~/arcus/shared/annotation-helper-tools/.auto_control.json"), 'r') as file:
+                project_assign = json.load(file)
+                project_id = project_assign[name]
+        except KeyError:
+            raise KeyError(f"Grader {name} not found in .auto_control.json. Please manually specify your project instead of using AUTO.")
     print(f"Project: {project_id}")
     return(project_id)
 
