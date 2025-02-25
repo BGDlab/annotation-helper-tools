@@ -504,7 +504,7 @@ def mark_one_report_sql(name, project, to_highlight={}):
 ##
 # Get more proc_ord_id for which no reports have been rated for the specified user to grade
 # @param name A str containing the full name of the grader (to also be referenced in publications)
-def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=100):
+def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=100, ignore_nlp = True, debug = False):
     if project_id == "SLIP":
         print(
             "SLIP is too broad of a cohort definition. Please modify your project_id to include the appropriate age group descriptor and then rerun this function."
@@ -539,7 +539,8 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
         distinct 
           CTE.counter,
           grader.proc_ord_id,
-          grader.grader_name'''
+          grader.grader_name,
+          proc.proc_ord_datetime'''
     
     if project_id == "Pb Cohort":
         q_get_validation_reports += ''',
@@ -554,6 +555,9 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
           )
           join CTE on (
             grader.proc_ord_id = CTE.proc_ord_id
+          )
+          join arcus.procedure_order proc on (
+            grader.proc_ord_id = proc.proc_ord_id
           ) '''
     
     if project_id == "Pb Cohort":
@@ -569,12 +573,30 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
           and grade_criteria = "'''+criteria+'''"
           and avg_grade > 0 
           and avg_grade <= 2 '''
+    if ignore_nlp:
+        q_get_validation_reports += '''
+          and grader_name NOT LIKE "NLP Models%"'''
     if project_id == "Pb Cohort":
         q_get_validation_reports += '''
         order by pb.sec_priority asc, pb.priority asc '''
+    elif project_id == "SLIP Adolescents":
+        q_get_validation_reports += '''
+        order by 
+            date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.proc_ord_datetime, day) <= 0 desc,
+            abs(date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.proc_ord_datetime, day)) asc
+        ''' 
+    elif project_id == "NF1":
+        q_get_validation_reports += '''order by proc.proc_ord_age asc''' # for the NF1 project, we want to grade the youngest scans first
+    else:
+        q_get_validation_reports += '''
+        order by proc.proc_ord_datetime desc
+        ''' 
         
     q_get_validation_reports += '''
         limit '''+str(num_to_add)+''';'''
+
+    if debug:
+        print(q_get_validation_reports)
     
     df_validation_reports = client.query(q_get_validation_reports).to_dataframe()
     # Add validation reports - proc_ids already in the table
@@ -588,7 +610,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
     # Add new reports
     q_get_new_reports = '''select
           projects.*,
-          proc.start_datetime
+          proc.proc_ord_datetime
         from 
           '''+project_table_name+''' projects
           join arcus.procedure_order proc on proc.proc_ord_id = projects.proc_ord_id'''
@@ -608,8 +630,8 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
     if project_id == "SLIP Adolescents":
         q_get_new_reports += '''
         order by 
-            date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.start_datetime, day) <= 0 desc,
-            abs(date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.start_datetime, day)) asc
+            date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.proc_ord_datetime, day) <= 0 desc,
+            abs(date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.proc_ord_datetime, day)) asc
         ''' 
         # for the SLIP Adolescents project, we want to first prioritize the earliest scans as far as 6 months
         # prior to support the prospective study. Then we want to prioritize scans in reverse chronological order
@@ -617,7 +639,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
     elif project_id == "NF1":
         q_get_new_reports += '''order by proc.proc_ord_age asc''' # for the NF1 project, we want to grade the youngest scans first
     else:
-        q_get_new_reports += '''order by proc.start_datetime desc''' # for all other projects, order by start_datetime
+        q_get_new_reports += '''order by proc.proc_ord_datetime desc''' # for all other projects, order by proc_ord_datetime
     
     
     if project_id == 'Pb Cohort':
@@ -625,8 +647,9 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
         
     q_get_new_reports += '''
         limit '''+str(num_to_add-len(to_add_validation))+''';'''
-    
-    # print(q_get_new_reports)
+
+    if debug:
+        print(q_get_new_reports)
     
     df_new_reports = client.query(q_get_new_reports).to_dataframe()
     to_add_new = list(set(df_new_reports['proc_ord_id'].values))
