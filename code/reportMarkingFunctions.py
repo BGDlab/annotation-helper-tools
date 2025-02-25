@@ -504,7 +504,7 @@ def mark_one_report_sql(name, project, to_highlight={}):
 ##
 # Get more proc_ord_id for which no reports have been rated for the specified user to grade
 # @param name A str containing the full name of the grader (to also be referenced in publications)
-def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=100, ignore_nlp = True, debug = False):
+def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=100, ignore_nlp = False, debug = False):
     if project_id == "SLIP":
         print(
             "SLIP is too broad of a cohort definition. Please modify your project_id to include the appropriate age group descriptor and then rerun this function."
