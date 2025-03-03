@@ -579,7 +579,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
     if project_id == "Pb Cohort":
         q_get_validation_reports += '''
         order by pb.sec_priority asc, pb.priority asc '''
-    elif project_id == "SLIP Adolescents":
+    elif project_id == "BBG":
         q_get_validation_reports += '''
         order by 
             date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.proc_ord_datetime, day) <= 0 desc,
@@ -627,7 +627,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
             from '''+ grader_table_name + ''' grader
           )
         '''
-    if project_id == "SLIP Adolescents":
+    if project_id == "BBG":
         q_get_new_reports += '''
         order by 
             date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.proc_ord_datetime, day) <= 0 desc,
