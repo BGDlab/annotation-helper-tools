@@ -2,7 +2,8 @@ select
 distinct 
   proc_ord.pat_id,
   proc_ord.proc_ord_id,
-  proc_ord.start_datetime
+  proc_ord.start_datetime,
+  proc_ord.proc_ord_datetime
 from
   arcus.procedure_order proc_ord
   join arcus.patient pat on proc_ord.pat_id = pat.pat_id
@@ -18,5 +19,5 @@ where
   and (proc_ord.proc_ord_desc like "%BRAIN%" or proc_ord.proc_ord_desc like "%NEURO%")
   and proc_ord.proc_ord_year >= 2010
 order by 
-  proc_ord.start_datetime desc ;
+  proc_ord.proc_ord_datetime desc ;
   

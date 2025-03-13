@@ -524,30 +524,32 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
 
     # Get the number of reports for a cohort
     get_project_report_stats(project_id)
-    
-    # Get the proc_ord_ids from the grader table
-    q_get_validation_reports = '''with CTE as (
-          select
-            count(proc_ord_id) as counter,
-            proc_ord_id,
-            avg(grade) as avg_grade
-          from
-            '''+grader_table_name+'''
-          group by proc_ord_id
-        )
-        select
-        distinct 
-          CTE.counter,
-          grader.proc_ord_id,
-          grader.grader_name,
-          proc.proc_ord_datetime'''
+
+    # Get both validation and new reports
+    q_get_reports = '''with CTE as (
+      select
+        count(proc_ord_id) as counter,
+        proc_ord_id,
+        avg(grade) as avg_grade
+      from
+        '''+grader_table_name+'''
+      group by proc_ord_id
+    )
+    select
+    distinct 
+      CTE.counter,
+      grader.proc_ord_id,
+      grader.grader_name,
+      proc.proc_ord_datetime,
+      proc.proc_ord_age,
+      "validation" as report_type'''
     
     if project_id == "Pb Cohort":
-        q_get_validation_reports += ''',
+        q_get_reports += ''',
         pb.sec_priority,
         pb.priority'''
         
-    q_get_validation_reports += '''
+    q_get_reports += '''
         from '''+grader_table_name+''' grader
           join lab.proc_ord_projects projects on (
             grader.proc_ord_id = projects.proc_ord_id
@@ -561,9 +563,9 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
           ) '''
     
     if project_id == "Pb Cohort":
-        q_get_validation_reports += '''  join lab.pb_ses_priority pb on pb.proc_ord_id = grader.proc_ord_id '''
+        q_get_reports += '''  join lab.pb_ses_priority pb on pb.proc_ord_id = grader.proc_ord_id '''
 
-    q_get_validation_reports += '''
+    q_get_reports += '''
         where
           projects.project = "'''+project_id+'''"
           and grader.grader_name != "'''+name+'''"  
@@ -572,53 +574,40 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
           and grade_category = "Unique"
           and grade_criteria = "'''+criteria+'''"
           and avg_grade > 0 
-          and avg_grade <= 2 '''
-    if ignore_nlp:
-        q_get_validation_reports += '''
-          and grader_name NOT LIKE "NLP Models%"'''
-    if project_id == "Pb Cohort":
-        q_get_validation_reports += '''
-        order by pb.sec_priority asc, pb.priority asc '''
-    elif project_id == "BBG":
-        q_get_validation_reports += '''
-        order by 
-            date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.proc_ord_datetime, day) <= 0 desc,
-            abs(date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.proc_ord_datetime, day)) asc
-        ''' 
-    elif project_id == "NF1":
-        q_get_validation_reports += '''order by proc.proc_ord_age asc''' # for the NF1 project, we want to grade the youngest scans first
-    else:
-        q_get_validation_reports += '''
-        order by proc.proc_ord_datetime desc
-        ''' 
-        
-    q_get_validation_reports += '''
-        limit '''+str(num_to_add)+''';'''
-
-    if debug:
-        print(q_get_validation_reports)
-    
-    df_validation_reports = client.query(q_get_validation_reports).to_dataframe()
-    # Add validation reports - proc_ids already in the table
-    to_add_validation = list(set(df_validation_reports['proc_ord_id'].values))
-    if len(to_add_validation) > 0:
-        add_reports_for_grader(to_add_validation, name, project_id)
-
-    # New reports
-    print("Number of validation reports added:", len(to_add_validation))
+          and avg_grade <= 2
+    '''
+    # The NF1 project isn't using validation, so exclude those
+    if project_id == "NF1":
+        q_get_reports += '''        and CTE.counter = 0
+    '''
     
     # Add new reports
-    q_get_new_reports = '''select
-          projects.*,
-          proc.proc_ord_datetime
-        from 
+    q_get_reports += '''UNION ALL
+    select
+          0 as counter,
+          projects.proc_ord_id,
+          "" as grader_name,
+          proc.proc_ord_datetime,
+          proc.proc_ord_age,
+          "new" as report_type'''
+
+    
+    if project_id == "Pb Cohort":
+        q_get_reports += ''',
+          pb.sec_priority,
+          pb.priority
+        '''
+
+        
+    q_get_reports += '''
+    from 
           '''+project_table_name+''' projects
           join arcus.procedure_order proc on proc.proc_ord_id = projects.proc_ord_id'''
     
     if project_id == "Pb Cohort":
-        q_get_new_reports += ' join lab.pb_ses_priority pb on pb.proc_ord_id = proc.proc_ord_id '
+        q_get_reports += ' join lab.pb_ses_priority pb on pb.proc_ord_id = proc.proc_ord_id '
         
-    q_get_new_reports += '''
+    q_get_reports += '''
         where
           project = "'''+project_id+'''"
           and projects.proc_ord_id not in (
@@ -627,39 +616,41 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
             from '''+ grader_table_name + ''' grader
           )
         '''
-    if project_id == "BBG":
-        q_get_new_reports += '''
+    if project_id == "BBG" or project_id == "SLIP Adolescents":
+        q_get_reports += '''
         order by 
-            date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.proc_ord_datetime, day) <= 0 desc,
-            abs(date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc.proc_ord_datetime, day)) asc
+            date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc_ord_datetime, day) <= 0 desc,
+            abs(date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc_ord_datetime, day)) asc
         ''' 
         # for the SLIP Adolescents project, we want to first prioritize the earliest scans as far as 6 months
         # prior to support the prospective study. Then we want to prioritize scans in reverse chronological order
         # to capture the most recent scans.
     elif project_id == "NF1":
-        q_get_new_reports += '''order by proc.proc_ord_age asc''' # for the NF1 project, we want to grade the youngest scans first
+        q_get_reports += '''order by proc_ord_age asc''' # for the NF1 project, we want to grade the youngest scans first
     else:
-        q_get_new_reports += '''order by proc.proc_ord_datetime desc''' # for all other projects, order by proc_ord_datetime
+        q_get_reports += '''order by proc_ord_datetime desc''' # for all other projects, order by proc_ord_datetime
     
     
     if project_id == 'Pb Cohort':
-        q_get_new_reports += ', pb.sec_priority asc, pb.priority asc '''
+        q_get_reports += ', sec_priority asc, priority asc '''
         
-    q_get_new_reports += '''
-        limit '''+str(num_to_add-len(to_add_validation))+''';'''
+    q_get_reports += '''
+        limit '''+str(num_to_add)+''';'''
 
     if debug:
-        print(q_get_new_reports)
+        print(q_get_reports)
     
-    df_new_reports = client.query(q_get_new_reports).to_dataframe()
-    to_add_new = list(set(df_new_reports['proc_ord_id'].values))
-    if len(to_add_new) > 0:
-        add_reports_for_grader(to_add_new, name, project_id)
+    df_reports = client.query(q_get_reports).to_dataframe()
+    to_add = list(set(df_reports['proc_ord_id'].values))
+    if len(to_add) > 0:
+        add_reports_for_grader(to_add, name, project_id)
    
-    print("Number of new reports to grade:", len(to_add_new))
+    # Count reports
+    print("Number of validation reports added:", sum(df_reports.report_type == "validation"))
+    print("Number of new reports added:", sum(df_reports.report_type == "new"))
 
     # Check: how many reports were added for the user?
-    if (len(to_add_validation) + len(to_add_new)) == 0:
+    if (len(to_add)) == 0:
         print(
             "There are no reports for this project that have yet to be either graded or validated."
         )

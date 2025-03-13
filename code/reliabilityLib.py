@@ -148,13 +148,21 @@ def calc_kappa_0_v_all(user1_grades, user2_grades):
     return kappa
 
 
-def get_reports_for_user(user, proc_ord_ids):
+def get_reports_for_user(user, proc_ord_ids, project = "reliability"):
     client = bigquery.Client()
 
-    get_user_reports = "select cast(proc_ord_id as int64) as proc_ord_id, grade from "+grader_table
-    get_user_reports += " where grader_name = '" + user
-    get_user_reports += "' and grade_category = 'Reliability';"
-
+    get_user_reports = '''select cast(proc_ord_id as int64) as proc_ord_id, 
+    grade, grade_category, grade_date
+    from ''' + grader_table + '''
+    where grader_name = "''' + user
+    
+    if project == "reliability":
+        get_user_reports += '''"
+        and grade_category = "Reliability";'''
+    else:
+        get_user_reports += '''"
+        and grade_category = "Unique";'''
+        
     user_reliablity_reports = client.query(get_user_reports).to_dataframe()
     user_reliablity_reports = user_reliablity_reports[
         user_reliablity_reports["proc_ord_id"].astype(int).isin(proc_ord_ids)
@@ -229,32 +237,60 @@ def print_disagreement_reports(disagreement_ids, grades1, grades2):
         clear_output()
 
 
-def calculate_metric_for_graders(graders, metric):
-    proc_ord_ids = get_reliability_proc_ord_ids()
-    metric_table = pd.DataFrame(0, columns=graders[1:], index=graders[:-1])
+def calculate_metric_for_graders(graders, metric, project = "reliability"):
+    if project == "reliability":
+        proc_ord_ids = get_reliability_proc_ord_ids()
+    else:
+        client = bigquery.Client()
+        q_query = f'''
+        SELECT DISTINCT proc_ord_id
+        FROM lab.proc_ord_projects
+        WHERE project = "{project}"'''
+        proc_ord_ids = client.query(q_query).to_dataframe().proc_ord_id.astype(int)
+    metric_table = pd.DataFrame(np.nan, columns=graders[1:], index=graders[:-1])
 
     for idx1 in range(len(graders) - 1):
-        grades1 = get_reports_for_user(graders[idx1], proc_ord_ids)
+        # Get the grades for grader 1
+        grades1 = get_reports_for_user(graders[idx1], proc_ord_ids, project = project)
         grades1 = grades1.sort_values("proc_ord_id", ignore_index=True)
+        grades1 = grades1.loc[np.logical_and(grades1.grade >= 0, grades1.grade <= 2),:]
 
         for idx2 in range(idx1 + 1, len(graders)):
-            # Get the grades for the graders
-            grades2 = get_reports_for_user(graders[idx2], proc_ord_ids)
+            # Get the grades for grader 2
+            grades2 = get_reports_for_user(graders[idx2], proc_ord_ids, project = project)
             grades2 = grades2.sort_values("proc_ord_id", ignore_index=True)
-
+            grades2 = grades2.loc[np.logical_and(grades2.grade >= 0, grades2.grade <= 2),:]
+            
+            # Select only intersecting proc_ord_ids
+            intersect_ids = set(grades1.proc_ord_id).intersection(set(grades2.proc_ord_id))
+            print(f"{len(intersect_ids)} common grades between {graders[idx1]} and {graders[idx2]}")
+            grades1_subset = grades1.loc[grades1.proc_ord_id.isin(intersect_ids),:]
+            grades2_subset = grades2.loc[grades2.proc_ord_id.isin(intersect_ids),:]
+            
+            if not ~grades1_subset.proc_ord_id.equals(grades2_subset.proc_ord_id):
+                print("Warning: proc_ord_ids from graders are not identical")
+            
             if metric == "disagreement":
-                tmp = identify_disagreement_reports(grades1, grades2)
+                tmp = identify_disagreement_reports(grades1_subset, grades2_subset)
                 metric_table.loc[graders[idx1], graders[idx2]] = len(tmp)
 
             elif metric == "kappa":
-                k = calc_kappa(grades1, grades2)
+                k = calc_kappa(grades1_subset, grades2_subset)
                 metric_table.loc[graders[idx1], graders[idx2]] = k
+                # grades = grades1.merge(grades2, how = "outer",
+                #                               on = ["proc_ord_id","grade_category"], 
+                #                               suffixes = ["_grader1", "_grader2"]).drop(['grade_category'], axis=1)
+                # print(grades)
+                # grades.to_csv("NF1_grade_interrater_reliability.csv")
 
             elif metric == "kappa2vAll":
-                k = calc_kappa_2_v_all(grades1, grades2)
+                k = calc_kappa_2_v_all(grades1_subset, grades2_subset)
                 metric_table.loc[graders[idx1], graders[idx2]] = k
             elif metric == "kappa0vAll":
-                k = calc_kappa_0_v_all(grades1, grades2)
+                k = calc_kappa_0_v_all(grades1_subset, grades2_subset)
+                metric_table.loc[graders[idx1], graders[idx2]] = k
+            elif metric == "kappa0vAll":
+                k = calc_kappa_0_v_all(grades1_subset, grades2_subset)
                 metric_table.loc[graders[idx1], graders[idx2]] = k
 
     return metric_table
