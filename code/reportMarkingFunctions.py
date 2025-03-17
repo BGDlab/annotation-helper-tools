@@ -511,6 +511,16 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
         )
         return -1
 
+    # Load project parameter file
+    if os.path.exists(f"project_params/{project_id}.json"):
+        param_file = f"project_params/{project_id}.json"
+    else:
+        print(f"Parameter file not found for project {project_id}. Loading default project parameters")
+        param_file = f"project_params/Default.json"
+        
+    with open(param_file, "r") as f:
+        project_params = json.load(f)
+        
     # Global var declaration
     global num_validation_graders
     global grader_table_name
@@ -576,8 +586,8 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
           and avg_grade > 0 
           and avg_grade <= 2
     '''
-    # The NF1 project isn't using validation, so exclude those
-    if project_id == "NF1":
+    # If the project does not want validation reports, exclude them
+    if project_params["validation"] == "no":
         q_get_reports += '''        and CTE.counter = 0
     '''
     
@@ -615,25 +625,9 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
               grader.proc_ord_id
             from '''+ grader_table_name + ''' grader
           )
-        '''
-    if project_id == "BBG" or project_id == "SLIP Adolescents":
-        q_get_reports += '''
-        order by 
-            date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc_ord_datetime, day) <= 0 desc,
-            abs(date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc_ord_datetime, day)) asc
-        ''' 
-        # for the SLIP Adolescents project, we want to first prioritize the earliest scans as far as 6 months
-        # prior to support the prospective study. Then we want to prioritize scans in reverse chronological order
-        # to capture the most recent scans.
-    elif project_id == "NF1":
-        q_get_reports += '''order by proc_ord_age asc''' # for the NF1 project, we want to grade the youngest scans first
-    else:
-        q_get_reports += '''order by proc_ord_datetime desc''' # for all other projects, order by proc_ord_datetime
-    
-    
-    if project_id == 'Pb Cohort':
-        q_get_reports += ', sec_priority asc, priority asc '''
-        
+        order by
+            ''' + ",\n            ".join(project_params["sort"])
+     
     q_get_reports += '''
         limit '''+str(num_to_add)+''';'''
 
