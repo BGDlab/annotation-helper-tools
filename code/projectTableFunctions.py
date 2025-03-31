@@ -9,13 +9,9 @@ from reportMarkingFunctions import *
 import json
 import matplotlib.pyplot as plt
 
+with open(f"{os.path.dirname(__file__)}/sql_tables.json", 'r', encoding='utf-8') as f:
+    sql_tables = json.load(f)
 
-req_table = "lab.requested_sessions_main_with_metadata_project_independent"
-grader_table = "lab.grader_table_with_metadata_project_independent"
-
-
-##
-#
 
 def load_project(project_name, name):
     if project_name != "AUTO":
@@ -30,7 +26,7 @@ def load_project(project_name, name):
     print(f"Grading reports under project {project_id}")
     return(project_id)
 
-def phrasesToHighlightFn(phrases_file = "phrases_to_highlight.json"):
+def phrasesToHighlightFn(phrases_file = "code/phrases_to_highlight.json"):
     # Load the dictionary of phrases to highlight in certain colors 
     with open(phrases_file, 'r', encoding='utf-8') as f:
         toHighlight = json.load(f)
@@ -73,6 +69,7 @@ def load_cohort_config(project_id, field):
 
 
 def add_reports_to_project(cohort):
+    global sql_tables
     # Set up the client
     client = bigquery.Client()
     # Load the query for the cohort
@@ -81,7 +78,7 @@ def add_reports_to_project(cohort):
     df_cohort_to_add = client.query(q_cohort_to_add).to_dataframe()
     
     # Get all reports labelled as belonging to the cohort
-    q_existing_cohort = 'select * from lab.proc_ord_projects where project = "'+cohort+'";'
+    q_existing_cohort = 'select * from ' + sql_tables["project_table"] + 'where project = "'+cohort+'";'
     df_existing_cohort = client.query(q_existing_cohort).to_dataframe()
     
     # Get any reports for the cohort not currently labeled
@@ -93,7 +90,7 @@ def add_reports_to_project(cohort):
     # If there are reports to add to the cohort project table
     if df_cohort_new.shape[0] > 0:
         # Create the query to add reports to the project table
-        q_insert_projects = 'insert into lab.proc_ord_projects (proc_ord_id, pat_id, project) VALUES '
+        q_insert_projects = 'insert into ' + sql_tables["project_table"] + ' (proc_ord_id, pat_id, project) VALUES '
         for idx, row in df_cohort_new.iterrows():
             q_insert_projects += '("'+row['proc_ord_id']+'", "'+row['pat_id']+'", "'+cohort+'"), '
         
@@ -105,18 +102,25 @@ def add_reports_to_project(cohort):
 
 
 def get_project_report_stats(cohort):
+    global sql_tables
     # Set up the client
     client = bigquery.Client()
     
     # Get the number of reports with the project label
-    q_project_reports = 'select * from lab.proc_ord_projects where project = "'+cohort+'"'
+    q_project_reports = 'select * from ' + sql_tables["project_table"] + ' where project = "'+cohort+'"'
     df_project_reports = client.query(q_project_reports).to_dataframe()
 
     # Load the config
     criteria = load_cohort_config(cohort, "grade_criteria")
     
     # Get the number of reports with the project label in the grader table
-    q_graded_reports = 'select distinct reports.* from lab.grader_table_with_metadata_project_independent reports join lab.proc_ord_projects projects on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) where projects.project = "'+cohort+'" and grade_criteria = "'+criteria+'";'
+    q_graded_reports = '''
+    select distinct reports.* 
+    from ''' + sql_tables["grader_table"] + ''' reports 
+    join ''' + sql_tables["project_table"] + ''' projects 
+    on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) 
+    where projects.project = "''' + cohort + '''" 
+    and grade_criteria = "''' + criteria + '''";'''
     df_graded_reports = client.query(q_graded_reports).to_dataframe()
     
     # Print info
@@ -182,17 +186,21 @@ def plot_age_at_scan(cohort, color_by=[], only_requested=False):
 def get_unique_report_data(cohort, only_requested):
     # Set up the client
     client = bigquery.Client()
-    global grader_table
-    global req_table
+    global sql_tables
     
     # Create the query to get the cohort info
-    q_cohort = 'select grader.*, pat.sex from '+grader_table+' grader'
-    q_cohort += ' join lab.proc_ord_projects projects on grader.proc_ord_id = projects.proc_ord_id'
-    q_cohort += ' join arcus.procedure_order proc on projects.proc_ord_id = proc.proc_ord_id'
-    q_cohort += ' join arcus.patient pat on pat.pat_id = proc.pat_id'
+    q_cohort = '''
+    select grader.*, pat.sex
+    from ''' + sql_tables["grader_table"] + ''' grader
+    join ''' + sql_tables["project_table"] + ''' projects
+        on grader.proc_ord_id = projects.proc_ord_id
+    join ''' + sql_tables["procedure_table"] + ''' proc 
+        on projects.proc_ord_id = proc.proc_ord_id
+    join ''' + sql_tables["patient_table"] + ''' pat 
+        on pat.pat_id = proc.pat_id'''
     # If only requested
     if only_requested:
-        q_cohort += ' join '+req_table+' req on req.proc_ord_id = grader.proc_ord_id'
+        q_cohort += ' join ' + sql_tables["req_table"] + ' req on req.proc_ord_id = grader.proc_ord_id'
     # Add the project condition
     q_cohort += ' where projects.project = "'+cohort+'"'
     q_cohort += ' and grade >= 0 and grade <= 2'

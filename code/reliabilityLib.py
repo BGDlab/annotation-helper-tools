@@ -3,9 +3,12 @@ from annotationHelperLib import *
 from sklearn.metrics import cohen_kappa_score
 from IPython.display import clear_output
 from google.cloud import bigquery  # SQL table interface on Arcus
+import os
+import json
 
-grader_table = "lab.grader_table_with_metadata_project_independent"
-
+with open(f"{os.path.dirname(__file__)}/sql_tables.json", 'r', encoding='utf-8') as f:
+    sql_tables = json.load(f)
+    
 ##
 # Get the proc_ord_id values for the reliability reports
 # @return proc_ord_ids A list of the 151 proc_ord_ids for the reliability reports
@@ -16,10 +19,11 @@ def get_reliability_proc_ord_ids():
 
 
 def get_reliability_ratings_df():
+    global sql_tables
     # Initialize the client service
     client = bigquery.Client()
 
-    reliability_ratings_query = "select * from "+grader_table+" where grade_category = 'Reliability';"
+    reliability_ratings_query = "select * from " + sql_tables["grader_table"] + " where grade_category = 'Reliability';"
     df_reliability = client.query(reliability_ratings_query).to_dataframe()
     df_reliability[["grade", "proc_ord_id"]] = df_reliability[
         ["grade", "proc_ord_id"]
@@ -42,7 +46,7 @@ def get_reliability_ratings_df():
         distinct(proc_ord_id) as proc_ord_id,
         grader_name
       from
-        """+grader_table+"""
+        """ + sql_tables["grader_table"] + """
       where
         grade_category = 'Reliability'
         and grader_name = 'Megan M. Himes'
@@ -50,7 +54,7 @@ def get_reliability_ratings_df():
     select
       main.proc_ord_id
     from
-      """+grader_table+""" main
+      """ + sql_tables["grader_table"] + """ main
       inner join cte on main.proc_ord_id = cte.proc_ord_id
     where
       main.grader_name = "Alesandra Gorgone"
@@ -149,11 +153,12 @@ def calc_kappa_0_v_all(user1_grades, user2_grades):
 
 
 def get_reports_for_user(user, proc_ord_ids, project = "reliability"):
+    global sql_tables
     client = bigquery.Client()
 
     get_user_reports = '''select cast(proc_ord_id as int64) as proc_ord_id, 
     grade, grade_category, grade_date
-    from ''' + grader_table + '''
+    from ''' + sql_tables["grader_table"] + '''
     where grader_name = "''' + user
     
     if project == "reliability":
@@ -172,6 +177,7 @@ def get_reports_for_user(user, proc_ord_ids, project = "reliability"):
 
 
 def print_report_from_proc_ord_id(proc_ord_id):
+    global sql_tables
     client = bigquery.Client()
 
     print("Proc ord id:", proc_ord_id)
@@ -194,7 +200,7 @@ def print_report_from_proc_ord_id(proc_ord_id):
 
     elif len(df_report) == 0:
         get_report_row = (
-            'SELECT * FROM arcus.procedure_order_narrative where proc_ord_id like "'
+            'SELECT * FROM ' + sql_tables["source_table"] + ' where proc_ord_id like "'
             + str(proc_ord_id)
             + '"'
         )
@@ -203,7 +209,7 @@ def print_report_from_proc_ord_id(proc_ord_id):
         )
 
         get_report_row = (
-            'SELECT * FROM arcus.procedure_order_impression where proc_ord_id like "'
+            'SELECT * FROM ' + sql_tables["impression_table"] + ' where proc_ord_id like "'
             + str(proc_ord_id)
             + '"'
         )
@@ -238,13 +244,14 @@ def print_disagreement_reports(disagreement_ids, grades1, grades2):
 
 
 def calculate_metric_for_graders(graders, metric, project = "reliability"):
+    global sql_tables
     if project == "reliability":
         proc_ord_ids = get_reliability_proc_ord_ids()
     else:
         client = bigquery.Client()
         q_query = f'''
         SELECT DISTINCT proc_ord_id
-        FROM lab.proc_ord_projects
+        FROM {sql_tables["project_table"]}
         WHERE project = "{project}"'''
         proc_ord_ids = client.query(q_query).to_dataframe().proc_ord_id.astype(int)
     metric_table = pd.DataFrame(np.nan, columns=graders[1:], index=graders[:-1])

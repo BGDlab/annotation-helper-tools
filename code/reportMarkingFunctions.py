@@ -11,30 +11,29 @@ from datetime import date
 from projectTableFunctions import *
 
 num_validation_graders = 2
-grader_table_name = "lab.grader_table_with_metadata_project_independent"
-project_table_name = "lab.proc_ord_projects"
-skipped_reports_table = "lab.skipped_reports"
 
+with open(f"{os.path.dirname(__file__)}/sql_tables.json", 'r', encoding='utf-8') as f:
+    sql_tables = json.load(f)
 
 ##
 # Back up grader table. Can be run on its own
 # or within another function
 # TODO: generalize backup to be SLIP or Non-SLIP
 def backup_grader_table():
-    global grader_table_name
+    global sql_tables
     client = bigquery.Client()
     # Step 1: save the grader_table_with_metadata to a .csv
     tmp_dir = os.path.expanduser("~/arcus/shared/.backups/")
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
-    tmp_fn = grader_table_name.replace(".", "_")+".csv"
+    tmp_fn = f'{sql_tables["grader_table"].replace(".", "_")}_{np.datetime64("today")}.csv'
     tmp_csv = os.path.join(tmp_dir, tmp_fn)
-    get_table_query = "select * from " + grader_table_name
+    get_table_query = "select * from " + sql_tables["grader_table"]
     grader_table = client.query(get_table_query).to_dataframe()
     grader_table.to_csv(tmp_csv, index=False)
 
     # Step 2: drop table lab.bak_grader_table_with_metadata
-    grader_table_name_bak = grader_table_name.replace(".", ".bak_")
+    grader_table_name_bak = sql_tables["grader_table"].replace(".", ".bak_")
     q_drop_table = "drop table "+grader_table_name_bak
     try:
         job = client.query(q_drop_table)
@@ -43,10 +42,10 @@ def backup_grader_table():
         pass
 
     # Step 3: create table lab.bak_grader_table_with_metadata
-    q_create_backup_table = "create table "+grader_table_name_bak+" as select * from "+grader_table_name
+    q_create_backup_table = "create table "+grader_table_name_bak+" as select * from " + sql_tables["grader_table"]
     job = client.query(q_create_backup_table)
     job.result()
-    print(grader_table_name, " backup successful")
+    print(sql_tables["grader_table"], " backup successful")
 
 
 ##
@@ -58,15 +57,17 @@ def backup_grader_table():
 def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
     # Handle different projects: 
     # If the project is not specified, assume we're looking only at SLIP grading
-        
-    global grader_table_name
-    global skipped_reports_table
+    global sql_tables
     # Get the flagged reports
     # Start the query
-    q = "select distinct * from "+grader_table_name
+    q = "select distinct * from " + sql_tables["grader_table"]
     # If the user wants to incorporate the project
     if project_name != "":
-        q += ' reports join lab.proc_ord_projects project on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) where projects.project = "'+project_name+'" '
+        q += f'''
+        reports join {sql_tables["project_table"]} project
+            on (reports.proc_ord_id = projects.proc_ord_id
+            and reports.pat_id = projects.pat_id)
+        where projects.project = "'+project_name+'" '''
 
     q += " where grade = " + str(flag)
     # If the grader i
@@ -78,10 +79,39 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
 
     if flagged_reports.shape[0] == 0:
         print("There are currently no reports with the grade of", flag)
+        return
 
     # Shuffle the flagged reports
     flagged_reports = flagged_reports.sample(frac=1)
 
+    # Get the narrative and impression for all reports
+    proc_ord_ids = flagged_reports.proc_ord_id.astype(str).unique()
+    proc_ord_id_str = '","'.join(proc_ord_ids)
+    
+    # Get the narrative and impression for all reports
+    q_get_report_rows = f'''
+        SELECT 
+          COALESCE(narrative.proc_ord_id, impression.proc_ord_id) as proc_ord_id,
+          narrative.narrative_text,
+          impression.impression_text
+        FROM {domain}.procedure_order_narrative narrative
+        FULL OUTER JOIN {domain}.procedure_order_impression impression
+          ON (narrative.proc_ord_id = impression.proc_ord_id)
+        WHERE narrative.proc_ord_id IN ("{proc_ord_id_str}")
+        OR impression.proc_ord_id IN ("{proc_ord_id_str}");'''
+    # print(q_get_report_rows)
+    report_df = client.query(q_get_report_rows).to_dataframe()
+    if df.proc_ord_id[~df.proc_ord_id.isin(report_df.proc_ord_id)].shape[0] == 0:
+        report_df.loc[~report_df.impression_text.isna(),"impression_text"] = "\n\nIMPRESSION: " + report_df.impression_text
+        report_df.loc[report_df.impression_text.isna(),"impression_text"] = ""
+        report_df["report_text"] = report_df.narrative_text + report_df.impression_text.astype(str)
+    else:
+        # Don't exit the function if proc_ord_ids are missing. Flag them for technical review
+        missing_proc_ids = df.proc_ord_id[~df.proc_ord_id.isin(report_df.proc_ord_id)]
+        missing_proc_str = '","'.join(missing_proc_ids)
+        print(f"Missing proc_ord_ids: {missing_proc_str}")
+        return
+    
     # for each flagged report
     count = 0
     for idx, row in flagged_reports.iterrows():
@@ -92,7 +122,7 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
         # Add a print to show why the report was previously flagged
         # Check if the report is in the lab.skipped_reports table
         check_skipped_query = (
-            "select * from "+skipped_reports_table+" where proc_ord_id = '"
+            "select * from "+ sql_tables["skipped_reports_table"] +" where proc_ord_id = '"
             + str(row["proc_ord_id"])
         )
         check_skipped_query += "' and grader_name = '" + row["grader_name"] + "';"
@@ -117,9 +147,10 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
         print("Year of scan:", row["proc_ord_year"])
         print("Age at scan:", np.round(row["age_in_days"] / 365.25, 2), "years")
         proc_ord_id = row["proc_ord_id"]
-        with open("phrases_to_highlight.json", "r") as f:
+        with open("code/phrases_to_highlight.json", "r") as f:
             to_highlight = json.load(f)
-        print_report(proc_ord_id, client, to_highlight)
+            
+        print_report(report_df.report_text[report_df.proc_ord_id == proc_ord_id].values[0], to_highlight)  # -- LOH
 
         print()
         # ask for grade
@@ -129,7 +160,7 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
             regrade_reason = get_reason("regrade")
 
             # Update the grader table with the new grade
-            q_update = "UPDATE "+grader_table_name+" set grade = " + str(
+            q_update = "UPDATE "+ sql_tables["grader_table"] +" set grade = " + str(
                 grade
             )
             q_update += ' WHERE proc_ord_id = "' + str(proc_ord_id) + '"'
@@ -140,7 +171,7 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
 
             if is_skip_logged:
                 # Update the skipped reports table
-                q_update_skipped = "update "+skipped_reports_table+" set grade = " + str(
+                q_update_skipped = "update "+ sql_tables["skipped_reports_table"] +" set grade = " + str(
                     grade
                 )
                 q_update_skipped += ', regrade_reason = "' + regrade_reason + '" '
@@ -154,7 +185,7 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
             else:
                 # Add the report to the skipped reports table.
                 # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason')
-                q_skip_report = "insert into "+skipped_reports_table+" values ("
+                q_skip_report = "insert into "+ sql_tables["skipped_reports_table"] +" values ("
                 today = date.today().strftime("%Y-%m-%d")
                 q_skip_report += (
                     "'"
@@ -174,17 +205,86 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
 
             print("New grade saved. Run the cell again to grade another report.")
 
+def print_report_from_proc(
+    proc_id, client, to_highlight={}, source_table="arcus.procedure_order_narrative"
+):
+    try:
+        # Get the report for that proc_ord_id from the primary report table
+        q_get_report_row = (
+            "SELECT * FROM "
+            + source_table
+            + ' where proc_ord_id like "'
+            + str(proc_id)
+            + '"'
+        )
+        df_report = client.query(q_get_report_row).to_dataframe()
+    except:
+        print(
+            "AN ERROR HAS OCCURRED: REPORT", proc_id, "CANNOT BE FOUND IN", source_table
+        )
+
+    # If the id was in the new table:
+    origin_table = source_table
+    domain = source_table.split(".")[0]
+
+    q_get_report_row = (
+        "SELECT * FROM "
+        + domain
+        + '.procedure_order_narrative where proc_ord_id = "'
+        + str(proc_id)
+        + '"'
+    )
+    if len(df_report) == 1:
+        report_text = (
+            client.query(q_get_report_row).to_dataframe()["narrative_text"].values[0]
+        )
+    else:
+        report_text = ""
+
+    q_get_report_row = (
+        "SELECT * FROM "
+        + domain
+        + '.procedure_order_impression where proc_ord_id = "'
+        + str(proc_id)
+        + '"'
+    )
+    df_report = client.query(q_get_report_row).to_dataframe()
+
+    if len(df_report) == 1:
+        report_text += "\n\nIMPRESSION: " + df_report["impression_text"].values[0]
+    elif len(df_report) == 0:
+        print("proc_ord_id not in", source_table, ":", proc_id)
+
+    report_text = " ".join(report_text.split())
+    report_text = report_text.replace("CLINICAL INDICATION", "\n\nCLINICAL INDICATION")
+    report_text = report_text.replace("TECHNIQUE", "\n\nTECHNIQUE")
+    report_text = report_text.replace("HISTORY", "\n\nHISTORY")
+    report_text = report_text.replace("IMPRESSION", "\n\nIMPRESSION")
+    report_text = report_text.replace("FINDINGS", "\n\nFINDINGS")
+    report_text = report_text.replace("COMPARISON", "\n\nCOMPARISON")
+
+    # If the user passed a dictionary of lists to highlight
+    if len(to_highlight.keys()) > 0:
+        for key in to_highlight.keys():
+            report_text = mark_text_color(report_text, to_highlight[key], key)
+
+    # Print the report and ask for a grade
+    print(report_text)
+    print()
+    # Print the proc_ord_id
+    print("Report id:", str(proc_id))
+    print()
 
 ##
 # Print a count of the number of reports graded by each grader since date d
 # @param d A string representation of the date in YYYY-MM-DD format
 def get_grade_counts_since(d):
     client = bigquery.Client()
-    global grader_table_name
+    global sql_tables
 
     # Query the table
     q = (
-        'select * from '+grader_table_name+' where grade_date != "0000-00-00" and cast(grade_date as date) >= cast("'
+        'select * from '+ sql_tables["grader_table"] +' where grade_date != "0000-00-00" and cast(grade_date as date) >= cast("'
         + d
         + '" as date);'
     )
@@ -332,7 +432,7 @@ def mark_selfeval_report_sql(name, to_highlight={}):
             report_text = mark_text_color(report_text, to_highlight[key], key)
 
     # Print the report and ask for a grade
-    print(report_text)
+    print_report(report_text)
     print()
     grade = str(
         input(
@@ -394,37 +494,38 @@ def mark_selfeval_report_sql(name, to_highlight={}):
 # Pull the report associated with a proc_ord_id for which the specified grader has a grade of 999, and then grade the report. Modifies lab.grader_table
 # @param name A str containing the full name of the grader (to also be referenced in publications)
 # @param to_highlight A dictionary with str keys specifying a color to highlight the list of str text with
-def mark_one_report_sql(name, project, to_highlight={}):
+def mark_reports(name, project, n_grades = 10, to_highlight={}):
     # Initialize the client service
     client = bigquery.Client()
-    global grader_table_name
-    global skipped_reports_table
+    global sql_tables
 
     # Get a row from the grader table for the specified rater that has not been graded yet
     # If there's any reliability reports, start there
-    q_get_single_row = (
-        'SELECT * FROM '+grader_table_name+' grader inner join arcus_2023_04_05.procedure_order_narrative narr on narr.proc_ord_id = grader.proc_ord_id WHERE grader_name = "'
-        + name
-        + '" and grade = 999 and grade_category = "Reliability" LIMIT 1'
-    )
-    df = client.query(q_get_single_row).to_dataframe()
+    q_get_rows = f'''
+    SELECT *
+    FROM {sql_tables["grader_table"]} grader
+    INNER JOIN arcus_2023_04_05.procedure_order_narrative narr
+        on narr.proc_ord_id = grader.proc_ord_id
+    WHERE grader_name = "{name}"
+        and grade = 999
+        and grade_category = "Reliability"
+    LIMIT {n_grades}'''
+    df = client.query(q_get_rows).to_dataframe()
     source_table = "arcus_2023_04_05.procedure_order_narrative"
 
     if len(df) == 0:
         # If no reports need Reliability, then get Unique reports
-        q_get_single_row = (
-            'SELECT * FROM '+grader_table_name
-            + ' reports join '+ project_table_name
-            + ' projects on (reports.proc_ord_id = projects.proc_ord_id and reports.pat_id = projects.pat_id) '
-            + ' WHERE grader_name = "'
-            + name
-            + '" and grade = 999 and grade_category = "Unique"'
-            + ' LIMIT 1'
-        )
-        # print(q_get_single_row)
-        df = client.query(q_get_single_row).to_dataframe()
+        q_get_rows = f'''
+            SELECT * FROM {sql_tables["grader_table"]} reports
+            WHERE grader_name = "{name}"
+                and grade = 999
+                and grade_category = "Unique"
+            ORDER BY reports.proc_ord_id
+            LIMIT {n_grades};'''
+        # print(q_get_rows)
+        df = client.query(q_get_rows).to_dataframe()
         source_table = "arcus.procedure_order_narrative"
-
+        
     if len(df) == 0:
         print(
             "There are currently no reports to grade for",
@@ -432,73 +533,120 @@ def mark_one_report_sql(name, project, to_highlight={}):
             " in the table. Please add more to continue.",
         )
         return
+        
+    domain = source_table.split(".")[0]
+    proc_ord_ids = df.proc_ord_id.astype(str).unique()
+    proc_ord_id_str = '","'.join(proc_ord_ids)
 
-    print("Year of scan:", df["proc_ord_year"].values[0])
-    print("Age at scan:", np.round(df["age_in_days"].values[0] / 365.25, 2), "years")
-    print("Grading Criteria:", df['grade_criteria'].values[0])
-    proc_ord_id = df["proc_ord_id"].values[0]
-    # Fixing the project name confusion
-    # Query the project table
-    q_projects = 'select * from '+project_table_name+' where proc_ord_id = "'+proc_ord_id+'"'
-    df_projects = client.query(q_projects).to_dataframe()
-    proc_projects = df_projects['project'].values
-    if project in proc_projects:
-        print("Project:", project)
-        print()
-    else:
-        print("WARNING: report "+str(proc_ord_id)+" does not appear to belong to the cohort for "+project)
-        print("It does belong to the following cohorts: "+", ".join(list(proc_projects)))
-        print()
-
-    if df['grade_category'].values[0] == "Reliability":
-        print("This is a Reliability report, not a unique report")
+    # Get the projects for all reports
+    q_get_report_rows = f'''
+        SELECT *
+        FROM {sql_tables["project_table"]}
+        where proc_ord_id IN ("{proc_ord_id_str}");'''
+    # print(q_get_report_rows)
+    project_df = client.query(q_get_report_rows).to_dataframe()
     
-    print_report(proc_ord_id, client, to_highlight, source_table)  # -- LOH
-    grade = get_grade(enable_md_flag=False)
+    # Get the narrative and impression for all reports
+    q_get_report_rows = f'''
+        SELECT 
+          COALESCE(narrative.proc_ord_id, impression.proc_ord_id) as proc_ord_id,
+          narrative.narrative_text,
+          impression.impression_text
+        FROM {domain}.procedure_order_narrative narrative
+        FULL OUTER JOIN {domain}.procedure_order_impression impression
+          ON (narrative.proc_ord_id = impression.proc_ord_id)
+        WHERE narrative.proc_ord_id IN ("{proc_ord_id_str}")
+        OR impression.proc_ord_id IN ("{proc_ord_id_str}");'''
+    # print(q_get_report_rows)
+    report_df = client.query(q_get_report_rows).to_dataframe()
+    if df.proc_ord_id[~df.proc_ord_id.isin(report_df.proc_ord_id)].shape[0] == 0:
+        report_df.loc[~report_df.impression_text.isna(),"impression_text"] = "\n\nIMPRESSION: " + report_df.impression_text
+        report_df.loc[report_df.impression_text.isna(),"impression_text"] = ""
+        report_df["report_text"] = report_df.narrative_text + report_df.impression_text.astype(str)
+    else:
+        # Don't exit the function if proc_ord_ids are missing. Flag them for technical review
+        missing_proc_ids = df.proc_ord_id[~df.proc_ord_id.isin(report_df.proc_ord_id)]
+        missing_proc_str = '","'.join(missing_proc_ids)
+        print(f"Missing proc_ord_ids: {missing_proc_str}")
+        q_update = f'''
+        UPDATE {sql_tables["grader_table"]}
+            set grade = 404,
+            grade_date = "{date.today().strftime("%Y-%m-%d")}"
+            WHERE proc_ord_id IN ("{missing_proc_str}")
+                and grader_name like "{name}"'''
+        
+        j_update = client.query(q_update)
+        j_update.result()
 
-    # write the case to handle the skipped reports 
-    if grade == -1 or grade == 503:
-        # Ask the user for a reason
-        if grade == -1:
-            skip_reason = get_reason("skip")
-        elif grade == 503:
-            skip_reason = "OUTSIDE SCAN"
-        # Write a query to add the report to the skipped reports table.
-        # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason', 'grade_criteria')
-        q_skip_report = "insert into "+skipped_reports_table+" values ("
-        today = date.today().strftime("%Y-%m-%d")
-        q_skip_report += (
-            "'"
-            + str(proc_ord_id)
-            + "', "
-            + str(grade)
-            + ", '"
-            + name
-            + "', '"
-            + str(today)
-            + "', '"
-            + skip_reason
-            + "', '', '', '"
-            + df['grade_criteria'].values[0]
-            + "');"
-        )
-
-        # Execute the query
-        # print(q_skip_report)
-        j_skip_report = client.query(q_skip_report)
-        j_skip_report.result()
-
-    # LOH - do more changes need to be made here to change the metadata in the table? I think no but ...
-    # Update the grader table with the new grade
-    q_update = "UPDATE "+grader_table_name+" set grade = " + str(grade)
-    today = date.today().strftime("%Y-%m-%d")
-    q_update += ', grade_date = "' + today + '"'
-    q_update += ' WHERE proc_ord_id = "' + str(df["proc_ord_id"].values[0]) + '"'
-    q_update += ' and grader_name like "' + name + '"'
-
-    j_update = client.query(q_update)
-    j_update.result()
-    print("Grade saved. Run the cell again to grade another report.")
+    # print(report_df)
+        
+    for proc_ord_id in proc_ord_ids:
+        print("Report ID: ", proc_ord_id)
+        print("Year of scan:", df.loc[df.proc_ord_id == proc_ord_id, "proc_ord_year"].values[0])
+        print("Age at scan:", np.round(df.loc[df.proc_ord_id == proc_ord_id, "age_in_days"].values[0] / 365.25, 2), "years")
+        print("Grading Criteria:", df.loc[df.proc_ord_id == proc_ord_id, 'grade_criteria'].values[0])
+        # Fixing the project name confusion
+        # Query the project table
+        proc_projects = project_df.project[project_df.proc_ord_id == proc_ord_id].values
+        if df['grade_category'].values[0] == "Reliability":
+            print("This is a Reliability report, not a unique report")
+        elif project in proc_projects:
+            print("Project:", project)
+            print()
+        else:
+            print("WARNING: report "+str(proc_ord_id)+" does not appear to belong to the cohort for "+project)
+            print("It does belong to the following cohorts: "+", ".join(list(proc_projects)))
+            print()
+        # print(report_df.report_text[report_df.proc_ord_id == proc_ord_id].values[0])
+        print_report(report_df.report_text[report_df.proc_ord_id == proc_ord_id].values[0], to_highlight)  # -- LOH
+        grade = get_grade(enable_md_flag=False)
+    
+        # write the case to handle the skipped reports 
+        if grade == -1 or grade == 503:
+            # Ask the user for a reason
+            if grade == -1:
+                skip_reason = get_reason("skip")
+            elif grade == 503:
+                skip_reason = "OUTSIDE SCAN"
+            # Write a query to add the report to the skipped reports table.
+            # ('proc_ord_id', 'grade', 'grader_name', 'skip_date', 'skip_reason', 'regrade_date', 'regrade_reason', 'grade_criteria')
+            q_skip_report = "insert into "+ sql_tables["skipped_reports_table"] +" values ("
+            today = date.today().strftime("%Y-%m-%d")
+            q_skip_report += (
+                "'"
+                + str(proc_ord_id)
+                + "', "
+                + str(grade)
+                + ", '"
+                + name
+                + "', '"
+                + str(today)
+                + "', '"
+                + skip_reason
+                + "', '', '', '"
+                + df['grade_criteria'].values[0]
+                + "');"
+            )
+    
+            # Execute the query
+            # print(q_skip_report)
+            j_skip_report = client.query(q_skip_report)
+            j_skip_report.result()
+    
+        # LOH - do more changes need to be made here to change the metadata in the table? I think no but ...
+        # Update the grader table with the new grade
+        q_update = f'''
+        UPDATE {sql_tables["grader_table"]}
+            set grade = {str(grade)},
+            grade_date = "{date.today().strftime("%Y-%m-%d")}"
+            WHERE proc_ord_id = "{str(df["proc_ord_id"].values[0])}"
+                and grader_name like "{name}"'''
+        # print(q_update)
+        j_update = client.query(q_update)
+        j_update.result()
+        print("Grade saved.")
+        clear_output()
+    print("Run the cell again to grade another report.")
 
 
 ##
@@ -523,7 +671,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
         
     # Global var declaration
     global num_validation_graders
-    global grader_table_name
+    global sql_tables
     print("It is expected for this function to take several minutes to run. Your patience is appreciated.")
 
     # Initialize the client service
@@ -536,13 +684,13 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
     get_project_report_stats(project_id)
 
     # Get both validation and new reports
-    q_get_reports = '''with CTE as (
+    q_get_reports = f'''
+    with CTE as (
       select
         count(proc_ord_id) as counter,
         proc_ord_id,
         avg(grade) as avg_grade
-      from
-        '''+grader_table_name+'''
+      from {sql_tables["grader_table"]}
       group by proc_ord_id
     )
     select
@@ -559,77 +707,81 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
         pb.sec_priority,
         pb.priority'''
         
-    q_get_reports += '''
-        from '''+grader_table_name+''' grader
-          join lab.proc_ord_projects projects on (
-            grader.proc_ord_id = projects.proc_ord_id
-            and grader.pat_id = projects.pat_id
-          )
-          join CTE on (
-            grader.proc_ord_id = CTE.proc_ord_id
-          )
-          join arcus.procedure_order proc on (
-            grader.proc_ord_id = proc.proc_ord_id
-          ) '''
+    q_get_reports += f'''
+    from {sql_tables["grader_table"]} grader
+      join {sql_tables["project_table"]} projects on (
+        grader.proc_ord_id = projects.proc_ord_id
+        and grader.pat_id = projects.pat_id
+      )
+      join CTE on (
+        grader.proc_ord_id = CTE.proc_ord_id
+      )
+      join arcus.procedure_order proc on (
+        grader.proc_ord_id = proc.proc_ord_id
+      )'''
     
     if project_id == "Pb Cohort":
-        q_get_reports += '''  join lab.pb_ses_priority pb on pb.proc_ord_id = grader.proc_ord_id '''
+        q_get_reports += '''
+      join lab.pb_ses_priority pb on pb.proc_ord_id = grader.proc_ord_id '''
 
-    q_get_reports += '''
-        where
-          projects.project = "'''+project_id+'''"
-          and grader.grader_name != "'''+name+'''"  
-          and CTE.counter < '''+str(num_validation_graders)+'''
-          and grader.grader_name not like "Coarse Text Search%"
-          and grade_category = "Unique"
-          and grade_criteria = "'''+criteria+'''"
-          and avg_grade > 0 
-          and avg_grade <= 2
-    '''
+    q_get_reports += f'''
+      where
+        projects.project = "{project_id}"
+        and grader.grader_name != "{name}"  
+        and CTE.counter < {str(num_validation_graders)}
+        and grader.grader_name not like "Coarse Text Search%"
+        and grade_category = "Unique"
+        and grade_criteria = "{criteria}"
+        and avg_grade > 0 
+        and avg_grade <= 2'''
     # If the project does not want validation reports, exclude them
     if project_params["validation"] == "no":
-        q_get_reports += '''        and CTE.counter = 0
-    '''
+        q_get_reports += '''
+        and CTE.counter = 0'''
     
     # Add new reports
-    q_get_reports += '''UNION ALL
+    q_get_reports += f'''
+    UNION ALL
     select
-          0 as counter,
-          projects.proc_ord_id,
-          "" as grader_name,
-          proc.proc_ord_datetime,
-          proc.proc_ord_age,
-          "new" as report_type'''
+        0 as counter,
+        projects.proc_ord_id,
+        "" as grader_name,
+        proc.proc_ord_datetime,
+        proc.proc_ord_age,
+        "new" as report_type'''
 
     
     if project_id == "Pb Cohort":
-        q_get_reports += ''',
-          pb.sec_priority,
-          pb.priority
-        '''
+        q_get_reports += f''',
+        pb.sec_priority,
+        pb.priority'''
 
-        
-    q_get_reports += '''
-    from 
-          '''+project_table_name+''' projects
-          join arcus.procedure_order proc on proc.proc_ord_id = projects.proc_ord_id'''
+    q_get_reports += f'''
+    from {sql_tables["project_table"]} projects
+    join arcus.procedure_order proc on 
+        (proc.proc_ord_id = projects.proc_ord_id)
+    left join arcus.encounter enc on 
+        (proc.encounter_id = enc.encounter_id)'''
     
     if project_id == "Pb Cohort":
-        q_get_reports += ' join lab.pb_ses_priority pb on pb.proc_ord_id = proc.proc_ord_id '
-        
-    q_get_reports += '''
-        where
-          project = "'''+project_id+'''"
-          and projects.proc_ord_id not in (
-            select
-              grader.proc_ord_id
-            from '''+ grader_table_name + ''' grader
-          )
-        order by
-            ''' + ",\n            ".join(project_params["sort"])
+        q_get_reports += f'''
+    join lab.pb_ses_priority pb on 
+        (pb.proc_ord_id = proc.proc_ord_id)'''
+
+    project_order_params = ",\n            ".join(project_params["sort"])
+    q_get_reports += f'''
+    where
+      project = "{project_id}"
+      and projects.proc_ord_id not in (
+        select
+          grader.proc_ord_id
+        from {sql_tables["grader_table"]} grader
+      )
+      and enc_type_name != "Reconciled Outside Data
+    order by {project_order_params}'''
      
-    q_get_reports += '''
-        limit '''+str(num_to_add)+''';'''
+    q_get_reports += f'''
+        limit {str(num_to_add)};'''
 
     if debug:
         print(q_get_reports)
@@ -650,7 +802,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
         )
     else:
         get_user_unrated_count = (
-            'SELECT * FROM '+grader_table_name+' WHERE grader_name like "'
+            'SELECT * FROM '+ sql_tables["grader_table"] +' WHERE grader_name like "'
             + name
             + '" and grade = 999'
         )
@@ -663,10 +815,10 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
 
 def add_reports_for_grader(proc_ord_ids, grader_name, project_id):
     client = bigquery.Client()
-    global grader_table_name
+    global sql_tables
     
     # Get the column names from the table
-    q_get_cols = "select * from "+grader_table_name+" limit 1;"
+    q_get_cols = "select * from "+ sql_tables["grader_table"] +" limit 1;"
     df_get_cols = client.query(q_get_cols).to_dataframe()
     cols_str = " ("+", ".join(list(df_get_cols))+") "
     
@@ -677,7 +829,7 @@ def add_reports_for_grader(proc_ord_ids, grader_name, project_id):
     criteria = load_cohort_config(project_id, "grade_criteria")
     
     # Set up the query
-    q_insert = '''insert into '''+grader_table_name+cols_str+'''
+    q_insert = '''insert into '''+ sql_tables["grader_table"] +cols_str+'''
         select
           distinct 
           proc_ord.proc_ord_id, "'''+grader_name+'''" as grader_name,
@@ -711,22 +863,21 @@ def add_reports_for_grader(proc_ord_ids, grader_name, project_id):
 def get_second_look_reports_to_grade(name, num_to_add=100):
     # Global var declaration
     global num_validation_graders
-    global grader_table_name
+    global sql_tables
     print(
         "It is expected for this function to take several minutes to run. Your patience is appreciated."
     )
-    print("Looking at", grader_table_name)
+    print("Looking at", sql_tables["grader_table"])
 
     # Initialize the client service
     client = bigquery.Client()
 
     # Get the proc_ord_ids from the grader table
-    q_grade_table = '''with CTE as (
+    q_grade_table = f'''with CTE as (
           select
             count(proc_ord_id) as counter,
             proc_ord_id
-          from
-            '''+grader_table_name+'''
+          from {sql_tables["grader_table"]}
           group by proc_ord_id
         )
         select
@@ -735,8 +886,8 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
           grader.proc_ord_id,
           grader.grader_name,
           grader.proc_ord_year
-        from '''+grader_table_name+''' grader
-          join lab.proc_ord_projects projects on (
+        from {sql_tables["grader_table"]} grader
+          join {sql_tables["project_table"]} projects on (
             grader.proc_ord_id = projects.proc_ord_id
             and grader.pat_id = projects.pat_id
           )
@@ -744,12 +895,12 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
             grader.proc_ord_id = CTE.proc_ord_id
           )
         where
-          grader.grader_name != "'''+name+'''"  
-          and CTE.counter < '''+str(num_validation_graders)+'''
+          grader.grader_name != "{name}"  
+          and CTE.counter < {str(num_validation_graders)}
           and grader.grader_name not like "Coarse Text Search%"
           and grade_category = "Unique"
         order by grader.proc_ord_year desc
-        limit '''+str(num_to_add)+''';'''
+        limit {str(num_to_add)};'''
     df_grade_table = client.query(q_grade_table).to_dataframe()
     
     to_validate_ids = df_grade_table["proc_ord_id"].values
@@ -761,7 +912,7 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
 
     # New reports
     q_get_user_unrated_count = (
-        'select * from '+grader_table_name+' where grade = 999 and grader_name like "%'
+        'select * from '+ sql_tables["grader_table"] +' where grade = 999 and grader_name like "%'
         + name
         + '%";'
     )
@@ -773,7 +924,7 @@ def get_second_look_reports_to_grade(name, num_to_add=100):
 
 def welcome_user(name):
     print("Welcome,", name)
-    global grader_table_name
+    global sql_tables
 
     client = bigquery.Client()
 
@@ -797,7 +948,7 @@ def welcome_user(name):
         return
 
     q_reliability = (
-        'select * from '+grader_table_name+' where grade_category = "Reliability" and grader_name like"'
+        'select * from '+ sql_tables["grader_table"] +' where grade_category = "Reliability" and grader_name like"'
         + name
         + '"'
     )
@@ -813,7 +964,7 @@ def welcome_user(name):
 
     else:
         q_get_queued_count = (
-            'select * from '+grader_table_name+' where grader_name like "'
+            'select * from '+ sql_tables["grader_table"] +' where grader_name like "'
         )
         q_get_queued_count += name + '" and grade = 999'
 
@@ -834,11 +985,11 @@ def welcome_user(name):
 
 def add_reliability_reports(name):
     client = bigquery.Client()
-    global grader_table_name
+    global sql_tables
 
     # Get the grader table
     q_get_grader_table = (
-        "SELECT * from "+grader_table_name+" where grader_name = '"
+        "SELECT * from "+ sql_tables["grader_table"] +" where grader_name = '"
         + name
         + "' and grade_category = 'Reliability';"
     )
@@ -847,7 +998,7 @@ def add_reliability_reports(name):
     df_reliability = pd.read_csv("~/arcus/shared/reliability_report_info.csv")
     add_reports = False
 
-    q_insert_report = "INSERT into "+grader_table_name+" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, grade_date) VALUES"
+    q_insert_report = "INSERT into "+ sql_tables["grader_table"] +" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, grade_date) VALUES"
 
     # print(df_grader['proc_ord_id'].values)
 
@@ -941,12 +1092,12 @@ def release_reports(grader_name, reports_list):
     # Initialize the client
     client = bigquery.Client()
     # Use the previously specified global vars
-    global grader_table_name
+    global sql_tables
 
     # For each report
     for proc_id in reports_list:
         # Update the grader table with the new grade
-        q_update = "UPDATE "+grader_table_name+" set grade = 999,"
+        q_update = "UPDATE "+ sql_tables["grader_table"] +" set grade = 999,"
         q_update += ' grade_date="0000-00-00"'
         q_update += ' WHERE proc_ord_id = "' + str(proc_id) + '"'
         q_update += ' and grader_name = "' + grader_name + '"'
@@ -969,9 +1120,9 @@ def release_reports(grader_name, reports_list):
 def backup_reliability_grades(user):
     client = bigquery.Client()
     # Use currently set global vars
-    global grader_table_name
+    global sql_tables
 
-    q = "select * from "+grader_table_name+" where grader_name = '" + user
+    q = "select * from "+ sql_tables["grader_table"] +" where grader_name = '" + user
     q += "' and grade_category = 'Reliability'"
     df_primary = client.query(q).to_dataframe()
 
@@ -1045,55 +1196,7 @@ def backup_reliability_grades(user):
                 j_update.result()
 
 
-def print_report(
-    proc_id, client, to_highlight={}, source_table="arcus.procedure_order_narrative"
-):
-    try:
-        # Get the report for that proc_ord_id from the primary report table
-        q_get_report_row = (
-            "SELECT * FROM "
-            + source_table
-            + ' where proc_ord_id like "'
-            + str(proc_id)
-            + '"'
-        )
-        df_report = client.query(q_get_report_row).to_dataframe()
-    except:
-        print(
-            "AN ERROR HAS OCCURRED: REPORT", proc_id, "CANNOT BE FOUND IN", source_table
-        )
-
-    # If the id was in the new table:
-    if len(df_report) == 1:
-        origin_table = source_table
-        domain = source_table.split(".")[0]
-
-        q_get_report_row = (
-            "SELECT * FROM "
-            + domain
-            + '.procedure_order_narrative where proc_ord_id = "'
-            + str(proc_id)
-            + '"'
-        )
-        report_text = (
-            client.query(q_get_report_row).to_dataframe()["narrative_text"].values[0]
-        )
-
-        q_get_report_row = (
-            "SELECT * FROM "
-            + domain
-            + '.procedure_order_impression where proc_ord_id = "'
-            + str(proc_id)
-            + '"'
-        )
-        df_report = client.query(q_get_report_row).to_dataframe()
-
-        if len(df_report) == 1:
-            report_text += "\n\nIMPRESSION: " + df_report["impression_text"].values[0]
-
-    elif len(df_report) == 0:
-        print("proc_ord_id not in", source_table, ":", proc_id)
-
+def print_report(report_text, to_highlight={}):
     report_text = " ".join(report_text.split())
     report_text = report_text.replace("CLINICAL INDICATION", "\n\nCLINICAL INDICATION")
     report_text = report_text.replace("TECHNIQUE", "\n\nTECHNIQUE")
@@ -1110,8 +1213,6 @@ def print_report(
     # Print the report and ask for a grade
     print(report_text)
     print()
-    # Print the proc_ord_id
-    print("Report id:", str(proc_id))
     print()
 
 
@@ -1230,9 +1331,9 @@ def check_unique_grades(df, name):
 def get_grader_status_report(name):
     client = bigquery.Client()
     # Declare global var, but automatically start with SLIP regardless
-    global grader_table_name
+    global sql_tables
 
-    query = "select * from "+grader_table_name.replace("nonslip_", "")+" where "
+    query = "select * from "+sql_tables["grader_table"].replace("nonslip_", "")+" where "
     query += "grader_name = '" + name + "' and grade_criteria = 'SLIP' ;"
     df = client.query(query).to_dataframe()
     # Case: user not in table
@@ -1248,7 +1349,7 @@ def get_grader_status_report(name):
     check_unique_grades(df, name)
 
     # See if the user is also grading nonslip reports
-    query = "select * from "+grader_table_name+" where "
+    query = "select * from "+ sql_tables["grader_table"] +" where "
     query += "grader_name = '" + name + "' and grade_criteria like 'nonSLIP%';"
     df = client.query(query).to_dataframe()
 

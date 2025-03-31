@@ -1,0 +1,10 @@
+{
+    "grader_table" : "lab.grader_table_with_metadata_project_independent",
+    "project_table" : "lab.proc_ord_projects",
+    "skipped_reports_table" : "lab.skipped_reports",
+    "req_table" : "lab.requested_sessions_main_with_metadata_project_independent",
+    "source_table" : "arcus.procedure_order_narrative",
+    "impression_table" : "arcus.procedure_order_impression",
+    "procedure_table" : "arcus.procedure_order",
+    "patient_table" : "arcus.patient"
+}
