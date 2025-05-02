@@ -1,5 +1,5 @@
 {
     "validation" : "yes",
-    "prioritize_validation" : "no",
+    "prioritize_validation" : "yes",
     "sort" : ["proc_ord_datetime desc"]
 }

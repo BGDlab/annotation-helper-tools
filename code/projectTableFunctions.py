@@ -8,6 +8,8 @@ from dxFilterLibraryPreGrading import *
 from reportMarkingFunctions import *
 import json
 import matplotlib.pyplot as plt
+import pathlib
+code_dir = pathlib.Path(__file__).parent.resolve()
 
 with open(f"{os.path.dirname(__file__)}/sql_tables.json", 'r', encoding='utf-8') as f:
     sql_tables = json.load(f)
@@ -33,7 +35,7 @@ def phrasesToHighlightFn(phrases_file = "code/phrases_to_highlight.json"):
     return(toHighlight)
 
 def load_cohort_config(project_id, field):
-    fn = "./queries/config.json" 
+    fn = f"{code_dir}/../queries/config.json" 
     with open(fn, "r") as f:
         project_lookup = json.load(f)
 

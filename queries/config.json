@@ -51,9 +51,5 @@
     "NF1": {
         "grade_criteria": "nonSLIP: NF1",
         "query": "./queries/nf1.txt"
-    },
-    "BBG": {
-        "grade_criteria": "SLIP",
-        "query": "./queries/bbg.txt"
     }
 }

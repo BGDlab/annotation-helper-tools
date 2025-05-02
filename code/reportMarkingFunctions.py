@@ -337,6 +337,12 @@ def read_sample_reports(to_highlight={}):
         # If the user passed a dictionary of lists to highlight
         if len(to_highlight.keys()) > 0:
             report_text = report
+            report_text = report_text.replace("CLINICAL INDICATION", "\n\nCLINICAL INDICATION")
+            report_text = report_text.replace("TECHNIQUE", "\n\nTECHNIQUE")
+            report_text = report_text.replace("HISTORY", "\n\nHISTORY")
+            report_text = report_text.replace("IMPRESSION", "\n\nIMPRESSION")
+            report_text = report_text.replace("FINDINGS", "\n\nFINDINGS")
+            report_text = report_text.replace("COMPARISON", "\n\nCOMPARISON")
             for key in to_highlight.keys():
                 report_text = mark_text_color(report_text, to_highlight[key], key)
 
@@ -777,7 +783,7 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
           grader.proc_ord_id
         from {sql_tables["grader_table"]} grader
       )
-      and enc_type_name != "Reconciled Outside Data
+      and enc_type_name != "Reconciled Outside Data"
     order by {project_order_params}'''
      
     q_get_reports += f'''
