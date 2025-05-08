@@ -645,7 +645,7 @@ def mark_reports(name, project, n_grades = 10, to_highlight={}):
         UPDATE {sql_tables["grader_table"]}
             set grade = {str(grade)},
             grade_date = "{date.today().strftime("%Y-%m-%d")}"
-            WHERE proc_ord_id = "{str(df["proc_ord_id"].values[0])}"
+            WHERE proc_ord_id = "{str(proc_ord_id)}"
                 and grader_name like "{name}"'''
         # print(q_update)
         j_update = client.query(q_update)
@@ -674,9 +674,22 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
         
     with open(param_file, "r") as f:
         project_params = json.load(f)
-        
+
+    # Extract sorting criteria from the parameters file
+    order_params = project_params["sort"]
+    if project_params["validation"] == "yes" and project_params["prioritize_validation"] == "yes":
+        order_params = ['report_type = "validation" desc'] + order_params
+    order_params_str = ",\n            ".join(order_params)
+
+    
     # Global var declaration
     global num_validation_graders
+    # If the project does not want validation reports, exclude them
+    if project_params["validation"] == "no":
+        num_validation = 0
+    else:
+        num_validation = num_validation_graders
+    
     global sql_tables
     print("It is expected for this function to take several minutes to run. Your patience is appreciated.")
 
@@ -689,106 +702,92 @@ def get_more_reports_to_grade(name, project_id="SLIP Adolescents", num_to_add=10
     # Get the number of reports for a cohort
     get_project_report_stats(project_id)
 
-    # Get both validation and new reports
+    # Get both validation and new reports in a single table
     q_get_reports = f'''
-    with CTE as (
-      select
-        count(proc_ord_id) as counter,
-        proc_ord_id,
-        avg(grade) as avg_grade
-      from {sql_tables["grader_table"]}
-      group by proc_ord_id
+    with joint_reports as (
+        with CTE as (
+          select
+            count(proc_ord_id) as counter,
+            proc_ord_id,
+            avg(grade) as avg_grade
+          from {sql_tables["grader_table"]}
+          group by proc_ord_id
+        )
+        select
+        distinct 
+          CTE.counter,
+          CTE.avg_grade,
+          grader.proc_ord_id,
+          grader.grader_name,
+          "validation" as report_type
+        from {sql_tables["grader_table"]} grader
+        join {sql_tables["project_table"]} projects on (
+          grader.proc_ord_id = projects.proc_ord_id
+          and grader.pat_id = projects.pat_id
+        )
+        join CTE on (
+          grader.proc_ord_id = CTE.proc_ord_id
+        )
+        where
+          projects.project = "{project_id}"
+          and grader.grader_name != "{name}"  
+          and CTE.counter < {str(num_validation)}
+          and grader.grader_name not like "Coarse Text Search%"
+          and grade_category = "Unique"
+          and grade_criteria = "{criteria}"
+          and avg_grade > 0 
+          and avg_grade <= 2
+        UNION ALL
+        select
+          0 as counter,
+          null as avg_grade,
+          projects.proc_ord_id,
+          "" as grader_name,
+          "new" as report_type
+        from {sql_tables["project_table"]} projects
+        join arcus.procedure_order proc on 
+          (proc.proc_ord_id = projects.proc_ord_id)
+        left join arcus.encounter enc on 
+          (proc.encounter_id = enc.encounter_id)
+        where
+        project = "{project_id}"
+          and projects.proc_ord_id not in (
+          select
+            grader.proc_ord_id
+            from {sql_tables["grader_table"]} grader
+            where grader.grade_criteria = "{criteria}"
+          )
+          and enc_type_name != "Reconciled Outside Data"
     )
-    select
-    distinct 
-      CTE.counter,
-      grader.proc_ord_id,
-      grader.grader_name,
-      proc.proc_ord_datetime,
-      proc.proc_ord_age,
-      "validation" as report_type'''
-    
+    SELECT DISTINCT
+    joint_reports.*,
+    pat.birth_weight_kg,
+    pat.gestational_age_num,
+    proc.proc_ord_datetime,
+    proc.proc_ord_age'''
+
     if project_id == "Pb Cohort":
         q_get_reports += ''',
         pb.sec_priority,
         pb.priority'''
+    
+    q_get_reports += f'''
+    FROM joint_reports
+    LEFT JOIN arcus.procedure_order proc ON (proc.proc_ord_id = joint_reports.proc_ord_id)
+    LEFT JOIN arcus.patient pat ON (pat.pat_id = proc.pat_id)'''
+
         
-    q_get_reports += f'''
-    from {sql_tables["grader_table"]} grader
-      join {sql_tables["project_table"]} projects on (
-        grader.proc_ord_id = projects.proc_ord_id
-        and grader.pat_id = projects.pat_id
-      )
-      join CTE on (
-        grader.proc_ord_id = CTE.proc_ord_id
-      )
-      join arcus.procedure_order proc on (
-        grader.proc_ord_id = proc.proc_ord_id
-      )'''
-    
     if project_id == "Pb Cohort":
         q_get_reports += '''
-      join lab.pb_ses_priority pb on pb.proc_ord_id = grader.proc_ord_id '''
-
-    q_get_reports += f'''
-      where
-        projects.project = "{project_id}"
-        and grader.grader_name != "{name}"  
-        and CTE.counter < {str(num_validation_graders)}
-        and grader.grader_name not like "Coarse Text Search%"
-        and grade_category = "Unique"
-        and grade_criteria = "{criteria}"
-        and avg_grade > 0 
-        and avg_grade <= 2'''
-    # If the project does not want validation reports, exclude them
-    if project_params["validation"] == "no":
-        q_get_reports += '''
-        and CTE.counter = 0'''
-    
-    # Add new reports
-    q_get_reports += f'''
-    UNION ALL
-    select
-        0 as counter,
-        projects.proc_ord_id,
-        "" as grader_name,
-        proc.proc_ord_datetime,
-        proc.proc_ord_age,
-        "new" as report_type'''
+      join lab.pb_ses_priority pb on pb.proc_ord_id = proc.proc_ord_id '''
 
     
-    if project_id == "Pb Cohort":
-        q_get_reports += f''',
-        pb.sec_priority,
-        pb.priority'''
-
-    q_get_reports += f'''
-    from {sql_tables["project_table"]} projects
-    join arcus.procedure_order proc on 
-        (proc.proc_ord_id = projects.proc_ord_id)
-    left join arcus.encounter enc on 
-        (proc.encounter_id = enc.encounter_id)'''
+    # Add birth weight, gestational_age, and proc_ord_datetime
     
-    if project_id == "Pb Cohort":
-        q_get_reports += f'''
-    join lab.pb_ses_priority pb on 
-        (pb.proc_ord_id = proc.proc_ord_id)'''
-
-    project_order_params = ",\n            ".join(project_params["sort"])
     q_get_reports += f'''
-    where
-      project = "{project_id}"
-      and projects.proc_ord_id not in (
-        select
-          grader.proc_ord_id
-        from {sql_tables["grader_table"]} grader
-      )
-      and enc_type_name != "Reconciled Outside Data"
-    order by {project_order_params}'''
-     
-    q_get_reports += f'''
-        limit {str(num_to_add)};'''
-
+    ORDER BY {order_params_str}
+    LIMIT {str(num_to_add)};'''
+        
     if debug:
         print(q_get_reports)
     
@@ -945,13 +944,13 @@ def welcome_user(name):
             "It appears you have yet to do the self-evaluation. Please grade those reports before continuing."
         )
         add_self_eval_reports(name)
-        return
+        return "self-eval"
 
     elif 999 in df_self_eval["grade"].values:
         print(
             "It appears you have started the self-evaluation but have not finished it. Please grade those reports before continuing."
         )
-        return
+        return "self-eval"
 
     q_reliability = (
         'select * from '+ sql_tables["grader_table"] +' where grade_category = "Reliability" and grader_name like"'
@@ -963,11 +962,11 @@ def welcome_user(name):
     if not check_reliability_ratings(df_reliability):
         print("It appears you have yet to grade the reliability reports.")
         add_reliability_reports(name)
-
+        return "reliability"
     elif 999 in df_reliability["grade"].values:
         reliability_count = len(df_reliability[df_reliability["grade"] == 999])
         print("You have", reliability_count, "reliability reports to grade.")
-
+        return "reliability"
     else:
         q_get_queued_count = (
             'select * from '+ sql_tables["grader_table"] +' where grader_name like "'
@@ -985,8 +984,7 @@ def welcome_user(name):
                 len(df_grader_unrated),
                 "ungraded reports to work on.",
             )
-
-    return True
+        return "unique"
 
 
 def add_reliability_reports(name):

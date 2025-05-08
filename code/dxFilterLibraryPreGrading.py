@@ -13,44 +13,30 @@ def map_proc_req_to_phecodes(table_name, verbose=False):
     client = bigquery.Client()
 
     # Get the diagnosis codes from the problem_list, encounter_diagnosis, and procedure_order_diagnosis tables
-    q = """with joint_dx as (
+    q = f"""with joint_dx as (
       select
         req.pat_id, 
+        dx.encounter_id,
         'arcus.problem_list' as dx_source,
-        dx.dx_id,
-        
         case 
           when dx.dx_id is null then "2475657929"
           else dx.dx_id end as dx_id
-      from """
-    q += table_name
-    q += """ req 
+      from {table_name} req 
         left join arcus.problem_list dx on dx.pat_id = req.pat_id
       union all
       select
         req.pat_id, 
+        dx.encounter_id,
         'arcus.encounter_diagnosis' as dx_source,
         case 
           when dx.dx_id is null then "2475657929"
           else dx.dx_id end as dx_id
-      from """
-    q += table_name
-    q += """ req 
+      from {table_name} req 
         left join arcus.encounter_diagnosis dx on dx.pat_id = req.pat_id
-      union all
-      select
-        req.pat_id, 
-        'arcus.procedure_order_diagnosis' as dx_source,
-        case 
-          when dx.dx_id is null then "2475657929"
-          else dx.dx_id end as dx_id
-      from """
-    q += table_name
-    q += """ req 
-        left join arcus.procedure_order_diagnosis dx on dx.pat_id = req.pat_id
     )
-    select
+    select DISTINCT
       joint_dx.pat_id,
+      joint_dx.encounter_id,
       joint_dx.dx_id as dx_id,
       icd.code as icd10_list,
       joint_dx.dx_source
@@ -60,7 +46,6 @@ def map_proc_req_to_phecodes(table_name, verbose=False):
     order by
       joint_dx.pat_id;
       """
-
     # Drop duplicates
     df_req_dx = client.query(q).to_dataframe()
     df_req_dx = df_req_dx.dropna().drop_duplicates()
@@ -69,9 +54,13 @@ def map_proc_req_to_phecodes(table_name, verbose=False):
     df_req_dx.loc[df_req_dx["icd10_list"].str.contains("R51"), "icd10_list"] = "R51"
 
     # Get the phecodes - currently loading from a .csv
-    base_path = "/home/youngjm/private_transfer/ICDexclusion_code/"
-    fn_icd_phecodes = os.path.join(base_path, "Phecode_map_v1_2_icd10cm_beta.csv")
-    df_icd_phecodes = pd.read_csv(fn_icd_phecodes, encoding="unicode_escape")
+    q = f"""
+        SELECT * 
+        FROM lab.icd10_to_phecode;
+      """
+
+    # Drop duplicates
+    df_icd_phecodes = client.query(q).to_dataframe()
     if verbose:
         print("loaded phecodes:", df_icd_phecodes.shape)  # correct number
 

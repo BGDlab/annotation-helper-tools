@@ -9,7 +9,7 @@ from reportMarkingFunctions import *
 import json
 import matplotlib.pyplot as plt
 import pathlib
-code_dir = pathlib.Path(__file__).parent.resolve()
+base_dir = os.path.dirname(pathlib.Path(__file__).parent.resolve())
 
 with open(f"{os.path.dirname(__file__)}/sql_tables.json", 'r', encoding='utf-8') as f:
     sql_tables = json.load(f)
@@ -35,7 +35,7 @@ def phrasesToHighlightFn(phrases_file = "code/phrases_to_highlight.json"):
     return(toHighlight)
 
 def load_cohort_config(project_id, field):
-    fn = f"{code_dir}/../queries/config.json" 
+    fn = f"{base_dir}/queries/config.json"
     with open(fn, "r") as f:
         project_lookup = json.load(f)
 
@@ -43,6 +43,7 @@ def load_cohort_config(project_id, field):
     project_info = project_lookup[project_id]
     if field == "query":
         query_fn = project_info["query"]
+        query_fn = f"{base_dir}/{query_fn}"
         q_dx_filter = ""
         if "dx_filter" in project_info:
             # Get the name of the dx filter file
@@ -76,11 +77,13 @@ def add_reports_to_project(cohort):
     client = bigquery.Client()
     # Load the query for the cohort
     q_cohort_to_add = load_cohort_config(cohort, 'query')
+    # print(q_cohort_to_add)
     # Get all the reports in the cohort
     df_cohort_to_add = client.query(q_cohort_to_add).to_dataframe()
     
     # Get all reports labelled as belonging to the cohort
-    q_existing_cohort = 'select * from ' + sql_tables["project_table"] + 'where project = "'+cohort+'";'
+    q_existing_cohort = 'select * from ' + sql_tables["project_table"] + ' where project = "'+cohort+'";'
+    # print(q_existing_cohort)
     df_existing_cohort = client.query(q_existing_cohort).to_dataframe()
     
     # Get any reports for the cohort not currently labeled
@@ -93,15 +96,19 @@ def add_reports_to_project(cohort):
     if df_cohort_new.shape[0] > 0:
         # Create the query to add reports to the project table
         q_insert_projects = 'insert into ' + sql_tables["project_table"] + ' (proc_ord_id, pat_id, project) VALUES '
+        count = 1
+        q = q_insert_projects
         for idx, row in df_cohort_new.iterrows():
-            q_insert_projects += '("'+row['proc_ord_id']+'", "'+row['pat_id']+'", "'+cohort+'"), '
+            q += '("'+row['proc_ord_id']+'", "'+row['pat_id']+'", "'+cohort+'"), '
+            if count % 1000 == 0 or idx == df_cohort_new.index[-1]:
+                q = q[:-2]+";"
         
-        q_insert_projects = q_insert_projects[:-2]+";"
-        
-        # Run the insertion query
-        j_insert_projects = client.query(q_insert_projects)
-        j_insert_projects.result()
-
+                # Run the insertion query
+                j_insert_projects = client.query(q)
+                j_insert_projects.result()
+                
+                q = q_insert_projects
+            count += 1
 
 def get_project_report_stats(cohort):
     global sql_tables

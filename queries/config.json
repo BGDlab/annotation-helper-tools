@@ -1,28 +1,23 @@
 {
     "SLIP Neonates": {
         "grade_criteria": "SLIP",
-        "query": "./queries/slip_neonates.txt",
-        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "query": "./queries/slip_neonates.txt"
     },
     "SLIP Toddlers": {
         "grade_criteria": "SLIP",
-        "query": "./queries/slip_toddlers.txt",
-        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "query": "./queries/slip_toddlers.txt"
     },
     "SLIP PreK": {
         "grade_criteria": "SLIP",
-        "query": "./queries/slip_prek.txt",
-        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "query": "./queries/slip_prek.txt"
     },
     "SLIP Elementary": {
         "grade_criteria": "SLIP",
-        "query": "./queries/slip_elementary.txt",
-        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "query": "./queries/slip_elementary.txt"
     },
     "SLIP Adolescents": {
         "grade_criteria": "SLIP",
-        "query": "./queries/slip_adolescents.txt",
-        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
+        "query": "./queries/slip_adolescents.txt"
     },
     "Clinical Imaging Genetics": {
         "grade_criteria": "SLIP",
@@ -51,5 +46,22 @@
     "NF1": {
         "grade_criteria": "nonSLIP: NF1",
         "query": "./queries/nf1.txt"
+    },
+    "SLIP Infants Very Premature": {
+        "grade_criteria": "SLIP",
+        "query": "./queries/slip_infants_v_premature.txt"
+    },
+    "SLIP Infants Mod Premature": {
+        "grade_criteria": "SLIP",
+        "query": "./queries/slip_infants_m_premature.txt"
+    },
+    "SLIP Infants At Term": {
+        "grade_criteria": "SLIP",
+        "query": "./queries/slip_infants_at_term.txt"
+    },
+    "BBG": {
+        "grade_criteria": "SLIP",
+        "query": "./queries/BBG.txt",
+        "dx_filter": "~/arcus/shared/filter-by-dx/dx-filters/phecodes_with_exclusion_TS_and_AAB_19April2024.csv"
     }
 }
