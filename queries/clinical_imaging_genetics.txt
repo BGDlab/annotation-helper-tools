@@ -15,6 +15,7 @@ where
   and proc_ord.proc_ord_desc not like "%METABOLIC%"
   and proc_ord.proc_ord_desc not like "%AUTOPSY%"
   and proc_ord.proc_ord_desc not like "%OUTSIDE%"
+  and proc_ord.proc_ord_desc like "%MR%"
   and (
     proc_ord.proc_ord_desc like "%BRAIN%"
     or proc_ord.proc_ord_desc like "%NEURO%"

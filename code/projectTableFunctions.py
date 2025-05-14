@@ -95,11 +95,12 @@ def add_reports_to_project(cohort):
     # If there are reports to add to the cohort project table
     if df_cohort_new.shape[0] > 0:
         # Create the query to add reports to the project table
-        q_insert_projects = 'insert into ' + sql_tables["project_table"] + ' (proc_ord_id, pat_id, project) VALUES '
+        q_insert_projects = 'insert into ' + sql_tables["project_table"] + ' (proc_ord_id, pat_id, project, date_added) VALUES '
         count = 1
         q = q_insert_projects
+        date_added = date.today().strftime("%Y-%m-%d")
         for idx, row in df_cohort_new.iterrows():
-            q += '("'+row['proc_ord_id']+'", "'+row['pat_id']+'", "'+cohort+'"), '
+            q += f'("{row["proc_ord_id"]}", "{row["pat_id"]}", "{cohort}", "{date_added}"), '
             if count % 1000 == 0 or idx == df_cohort_new.index[-1]:
                 q = q[:-2]+";"
         

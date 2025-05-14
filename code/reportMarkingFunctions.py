@@ -1002,7 +1002,7 @@ def add_reliability_reports(name):
     df_reliability = pd.read_csv("~/arcus/shared/reliability_report_info.csv")
     add_reports = False
 
-    q_insert_report = "INSERT into "+ sql_tables["grader_table"] +" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, grade_date) VALUES"
+    q_insert_report = "INSERT into "+ sql_tables["grader_table"] +" (proc_ord_id, grader_name, grade, grade_category, pat_id, age_in_days, proc_ord_year, proc_name, report_origin_table, grade_date, grade_criteria) VALUES"
 
     # print(df_grader['proc_ord_id'].values)
 
@@ -1030,7 +1030,8 @@ def add_reliability_reports(name):
                 + "', '"
                 + row["report_origin_table"]
             )
-            q_insert_report += "', '0000-00-00'),"
+            q_insert_report += "', '0000-00-00'"
+            q_insert_report += "', 'SLIP'),"
             add_reports = True
 
     if add_reports:

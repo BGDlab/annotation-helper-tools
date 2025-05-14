@@ -7,6 +7,8 @@ select
 from
   arcus.procedure_order proc_ord
   join arcus.patient pat on proc_ord.pat_id = pat.pat_id
+  left join arcus.procedure_order_narrative narr on narr.proc_ord_id = proc_ord.proc_ord_id
+  left join arcus.procedure_order_impression imp on imp.proc_ord_id = proc_ord.proc_ord_id
 where
   proc_ord.proc_ord_age <= (365.25 * 2)
   and proc_ord.proc_ord_age > (30)
@@ -15,7 +17,11 @@ where
   and proc_ord.proc_ord_desc not like "%FUNCTL%"
   and proc_ord.proc_ord_desc not like "%METABOLIC%"
   and proc_ord.proc_ord_desc not like "%AUTOPSY%"
-  and (proc_ord.proc_ord_desc like "%BRAIN%" or proc_ord.proc_ord_desc like "%NEURO%")
+  and proc_ord.proc_ord_desc like "%MR%"
+  and (imp.impression_text is not null 
+    or narr.narrative_text is not null)
+  and (proc_ord.proc_ord_desc like "%BRAIN%"
+    or proc_ord.proc_ord_desc like "%NEURO%")
   and proc_ord.proc_ord_year >= 2010
 order by 
   case when pat.gestational_age_num is not null then 0 else 1 end asc,
