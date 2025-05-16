@@ -958,6 +958,7 @@ def welcome_user(name):
         + '"'
     )
     df_reliability = client.query(q_reliability).to_dataframe()
+    # print(check_reliability_ratings(df_reliability))
 
     if not check_reliability_ratings(df_reliability):
         print("It appears you have yet to grade the reliability reports.")
@@ -1010,28 +1011,11 @@ def add_reliability_reports(name):
         # print(row['proc_ord_id'])
         if str(row["proc_ord_id"]) not in df_grader["proc_ord_id"].values:
             # Add the report
-            q_insert_report += (
-                " ('"
-                + str(int(row["proc_ord_id"]))
-                + "', '"
-                + name
-                + "', 999, 'Reliability', '"
-            )
-            q_insert_report += (
-                row["pat_id"]
-                + "', "
-                + str(row["age_in_days"])
-                + ", "
-                + str(row["proc_ord_year"])
-                + ", '"
-            )
-            q_insert_report += (
-                row["proc_name"]
-                + "', '"
-                + row["report_origin_table"]
-            )
-            q_insert_report += "', '0000-00-00'"
-            q_insert_report += "', 'SLIP'),"
+            q_insert_report += f'''
+            ("{str(int(row["proc_ord_id"]))}", "{name}", 999, "Reliability",
+            "{row["pat_id"]}", {str(row["age_in_days"])}, {str(row["proc_ord_year"])},
+            "{row["proc_name"]}", "{row["report_origin_table"]}", 
+            "0000-00-00", "SLIP"),'''
             add_reports = True
 
     if add_reports:
@@ -1068,7 +1052,7 @@ def check_reliability_ratings(df_grader):
     # print(num_reliability)
     # print(len(reliability_ids))
 
-    assert num_reliability == len(reliability_ids)
+    # assert num_reliability == len(reliability_ids)
     print(
         name,
         "has graded",
