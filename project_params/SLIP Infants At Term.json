@@ -1,8 +1,0 @@
-{
-    "validation" : "yes",
-    "prioritize_validation" : "yes",
-    "sort" : ["avg_grade = 2 desc",
-              "pat.gestational_age_num IS NOT NULL desc",
-              "pat.birth_weight_kg IS NOT NULL desc",
-              "proc_ord_datetime desc"]
-}

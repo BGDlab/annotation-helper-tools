@@ -9,7 +9,7 @@ def main():
     last4Weeks = (today - timedelta(days=28)).isoformat()
 
     # Print a nice header
-    print("The interaction report for SCIT-605 is below:\n")
+    print("The interaction report is below:\n")
 
     # Print the interaction report for the last week
     print("Since", lastWeek)

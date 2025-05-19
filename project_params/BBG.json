@@ -1,6 +1,0 @@
-{
-    "validation" : "yes",
-    "prioritize_validation" : "no",
-    "sort" : ["date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc_ord_datetime, day) <= 0 desc",
-              "abs(date_diff(DATE_ADD(current_date(), INTERVAL -7 MONTH), proc_ord_datetime, day)) asc"]
-}

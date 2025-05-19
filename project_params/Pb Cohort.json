@@ -1,7 +1,0 @@
-{
-    "validation" : "yes",
-    "prioritize_validation" : "no",
-    "sort" : ["sec_priority asc",
-              "priority asc",
-              "proc_ord_datetime desc"]
-}

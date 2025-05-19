@@ -120,10 +120,6 @@ def check_for_annotator(df, name):
 
 # Main
 if __name__ == "__main__":
-    print("Radiology Report Annotation Helper Library v 0.2")
-    print("Written and maintained by Jenna Young, PhD (@jmschabdach on Github)")
-    print("Tested and used by:")
-    print("- Caleb Schmitt, Summer 2021")
-    print("- Nadia Ngom, Fall 2021 - Spring 2022")
-    print("- Emma Yang, Summer 2022")
-    print("- Aaron Alexander-Bloch")
+    print("Radiology Report Annotation Helper Library v 0.3")
+    print("Written and maintained by Ben Jung, PhD (@bencephalon on Github)")
+   
