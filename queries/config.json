@@ -39,9 +39,13 @@
         "grade_criteria": "SLIP",
         "query": "./queries/indication_psychosis.txt"
     },
-    "22q11": {
+    "22q11DS": {
         "grade_criteria": "SLIP",
-        "query": "./queries/22q_2020.txt"
+        "query": "./queries/22q11DS.txt"
+    },
+    "Epilepsy": {
+        "grade_criteria": "SLIP",
+        "query": "./queries/epilepsy.txt"
     },
     "NF1": {
         "grade_criteria": "nonSLIP: NF1",
