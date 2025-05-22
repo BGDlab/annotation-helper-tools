@@ -94,14 +94,14 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
           COALESCE(narrative.proc_ord_id, impression.proc_ord_id) as proc_ord_id,
           narrative.narrative_text,
           impression.impression_text
-        FROM {domain}.procedure_order_narrative narrative
-        FULL OUTER JOIN {domain}.procedure_order_impression impression
+        FROM arcus.procedure_order_narrative narrative
+        FULL OUTER JOIN arcus.procedure_order_impression impression
           ON (narrative.proc_ord_id = impression.proc_ord_id)
         WHERE narrative.proc_ord_id IN ("{proc_ord_id_str}")
         OR impression.proc_ord_id IN ("{proc_ord_id_str}");'''
     # print(q_get_report_rows)
     report_df = client.query(q_get_report_rows).to_dataframe()
-    if df.proc_ord_id[~df.proc_ord_id.isin(report_df.proc_ord_id)].shape[0] == 0:
+    if report_df.proc_ord_id[~report_df.proc_ord_id.isin(report_df.proc_ord_id)].shape[0] == 0:
         report_df.loc[~report_df.impression_text.isna(),"impression_text"] = "\n\nIMPRESSION: " + report_df.impression_text
         report_df.loc[report_df.impression_text.isna(),"impression_text"] = ""
         report_df["report_text"] = report_df.narrative_text + report_df.impression_text.astype(str)
@@ -147,7 +147,7 @@ def regrade_skipped_reports(client, project_name="", grader="", flag=-1):
         print("Year of scan:", row["proc_ord_year"])
         print("Age at scan:", np.round(row["age_in_days"] / 365.25, 2), "years")
         proc_ord_id = row["proc_ord_id"]
-        with open("code/phrases_to_highlight.json", "r") as f:
+        with open("../code/phrases_to_highlight.json", "r") as f:
             to_highlight = json.load(f)
             
         print_report(report_df.report_text[report_df.proc_ord_id == proc_ord_id].values[0], to_highlight)  # -- LOH
@@ -565,7 +565,7 @@ def mark_reports(name, project, n_grades = 10, to_highlight={}):
         OR impression.proc_ord_id IN ("{proc_ord_id_str}");'''
     # print(q_get_report_rows)
     report_df = client.query(q_get_report_rows).to_dataframe()
-    if df.proc_ord_id[~df.proc_ord_id.isin(report_df.proc_ord_id)].shape[0] == 0:
+    if report_df.proc_ord_id[~df.proc_ord_id.isin(report_df.proc_ord_id)].shape[0] == 0:
         report_df.loc[~report_df.impression_text.isna(),"impression_text"] = "\n\nIMPRESSION: " + report_df.impression_text
         report_df.loc[report_df.impression_text.isna(),"impression_text"] = ""
         report_df["report_text"] = report_df.narrative_text + report_df.impression_text.astype(str)
@@ -586,7 +586,8 @@ def mark_reports(name, project, n_grades = 10, to_highlight={}):
 
     # print(report_df)
         
-    for proc_ord_id in proc_ord_ids:
+    for i, proc_ord_id in enumerate(proc_ord_ids):
+        print(f"Report {i+1}/{len(proc_ord_ids)}")
         print("Report ID: ", proc_ord_id)
         print("Year of scan:", df.loc[df.proc_ord_id == proc_ord_id, "proc_ord_year"].values[0])
         print("Age at scan:", np.round(df.loc[df.proc_ord_id == proc_ord_id, "age_in_days"].values[0] / 365.25, 2), "years")
@@ -1223,7 +1224,7 @@ def get_grade(enable_md_flag=False):
         potential_grades = ["0", "1", "2", "-1", "-2", "503"]
         grade = str(
             input(
-                "Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip/-2 escalate to clinician/503 outside scan): "
+                "Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip/-2 escalate to clinician: "
             )
         )
 
@@ -1231,7 +1232,7 @@ def get_grade(enable_md_flag=False):
         potential_grades = ["0", "1", "2", "-1", "503"]
         grade = str(
             input(
-                "Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip/503 outside scan): "
+                "Assign a SLIP rating to this report (0 do not use/1 maybe use/2 definitely use/-1 skip): "
             )
         )
 
